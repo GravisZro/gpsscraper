@@ -1,0 +1,6 @@
+[submodule "simplified"]
+	path = simplified
+	url = git@github.com:GravisZro/simplified.git
+[submodule "shortjson"]
+	path = shortjson
+	url = git@github.com:GravisZro/shortjson.git
