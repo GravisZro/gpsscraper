@@ -30,6 +30,30 @@ bool list_sorter(const std::pair<std::string, ScraperBase*>& first,
                  const std::pair<std::string, ScraperBase*>& second)
   { return first.first < second.first; }
 
+
+template<typename T>
+std::ostream & operator << (std::ostream &out, const std::optional<T>& value) noexcept
+{
+  if(!value)
+    out << "null,";
+  else
+    out << *value;
+  return out;
+}
+
+template<>
+std::ostream & operator << (std::ostream &out, const std::optional<uint8_t>& value) noexcept
+{
+  if(!value)
+    out << "null,";
+  else
+    out << int(*value);
+  return out;
+}
+
+
+
+
 std::ostream & operator << (std::ostream &out, const station_info_t& station_info) noexcept
 {
   out << station_info.latitude << ','
@@ -40,25 +64,27 @@ std::ostream & operator << (std::ostream &out, const station_info_t& station_inf
       << '"' << station_info.city << '"' << ','
       << '"' << station_info.state << '"' << ','
       << '"' << station_info.country << '"' << ','
-      << station_info.zipcode << ',';
-
-  if(station_info.phone_number)
-    out << '"' << *station_info.phone_number << '"' << ',';
-  if(station_info.times_accessible)
-    out << '"' << *station_info.times_accessible << '"' << ',';
-  if(station_info.price_string)
-    out << '"' << *station_info.price_string << '"' << ',';
-  if(station_info.payment_types)
-    out << '"' << *station_info.payment_types << '"' << ',';
-
-  if(station_info.CHAdeMO)
-    out << int(*station_info.CHAdeMO) << ',';
-  if(station_info.JPlug)
-    out << int(*station_info.JPlug) << ',';
-  if(station_info.J1772_combo)
-    out << int(*station_info.J1772_combo);
+      << station_info.zipcode << ','
+      << '"' << station_info.phone_number << '"' << ','
+      << '"' << station_info.access_times << '"' << ','
+//      << station_info.price_number << ','
+      << '"' << station_info.price_string << '"' << ','
+      << '"' << station_info.payment_methods << '"' << ','
+         ;
 
   return out;
+}
+
+
+std::vector<uint8_t> serialize(int32_t data)
+{
+  std::vector<uint8_t> rval;
+  uint32_t d = data;
+  rval.push_back((d >> 24) & 0xFF);
+  rval.push_back((d >> 16) & 0xFF);
+  rval.push_back((d >>  8) & 0xFF);
+  rval.push_back(d & 0xFF);
+  return rval;
 }
 
 void exec_stage(ScraperBase* scraper, int stage, const station_info_t& station_info, const std::string& page_text, std::list<station_info_t>& storage, uintptr_t& insertions)
@@ -85,26 +111,130 @@ void exec_stage(ScraperBase* scraper, int stage, const station_info_t& station_i
 
     assert(db.open("stations.db"));
 
-    assert(db.execute("CREATE TABLE IF NOT EXISTS 'stations' ("
-                        "'key' INTEGER NOT NULL UNIQUE,"
-                        "'latitude' REAL NOT NULL,"
-                        "'longitude' REAL NOT NULL,"
-                        "'name' TEXT NOT NULL,"
-                        "'street_number' INTEGER,"
-                        "'street_name' TEXT,"
-                        "'city' TEXT,"
-                        "'state' TEXT,"
-                        "'country' TEXT,"
-                        "'zipcode' TEXT,"
-                        "'phone_number' TEXT,"
-                        "'times_accessible' TEXT,"
-                        "'price_string' TEXT,"
-                        "'payment_types' TEXT,"
-                        "'CHAdeMO' INTEGER NOT NULL DEFAULT 0,"
-                        "'JPlug' INTEGER NOT NULL DEFAULT 0,"
-                        "'J1772_combo' INTEGER NOT NULL DEFAULT 0,"
-                        "PRIMARY KEY('key')"
-                      ")"));
+    assert(db.execute(
+             R"(
+            CREATE TABLE IF NOT EXISTS "stations" (
+              "station_id" INTEGER NOT NULL UNIQUE,
+              "latitude" REAL NOT NULL,
+              "longitude" REAL NOT NULL,
+              "name" TEXT NOT NULL,
+              "description" TEXT NOT NULL,
+              "street_number" INTEGER,
+              "street_name" TEXT,
+              "city" TEXT,
+              "state" TEXT,
+              "country" TEXT,
+              "zipcode" TEXT,
+              "phone_number" TEXT DEFAULT NULL,
+              "URL" TEXT DEFAULT NULL,
+              "access_times" TEXT DEFAULT NULL,
+              "access_type" TEXT DEFAULT NULL,
+
+              "network_id" INTEGER DEFAULT NULL,
+              "price_string" TEXT DEFAULT NULL,
+              "payment_methods" TEXT DEFAULT NULL,
+
+              "port_ids" BLOB DEFAULT NULL,
+              PRIMARY KEY("station_id")
+            )
+            )"));
+
+    assert(db.execute(
+             R"(
+            CREATE TABLE IF NOT EXISTS "ports" (
+              "port_id" INTEGER NOT NULL UNIQUE,
+              "station_id" INTEGER NOT NULL,
+
+              "level" INTEGER NOT NULL,
+              "connector" INTEGER DEFAULT NULL,
+              "amp" TEXT DEFAULT NULL,
+              "kw" TEXT DEFAULT NULL,
+              "volt" TEXT DEFAULT NULL,
+
+              "price_string" TEXT DEFAULT NULL,
+              "payment_methods" TEXT DEFAULT NULL,
+              "price_free" BOOLEAN DEFAULT FALSE,
+              "price_unit" INTEGER DEFAULT NULL,
+              "price_initial" FLOAT DEFAULT NULL,
+              "price_per_KWh" FLOAT DEFAULT NULL,
+
+              "network_id" INTEGER DEFAULT NULL,
+              "display_name" TEXT DEFAULT NULL,
+              "network_port_id" TEXT DEFAULT NULL,
+
+              "weird" BOOLEAN DEFAULT FALSE,
+              PRIMARY KEY("port_id")
+            )
+            )"));
+
+    assert(db.execute(
+             R"(
+            CREATE TABLE IF NOT EXISTS "networks" (
+              "network_id" INTEGER NOT NULL UNIQUE,
+              "name" TEXT NOT NULL,
+              PRIMARY KEY("network_id")
+            )
+            )"));
+
+
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Non-Networked\", 17)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Unknown\", 0)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"AmpUp\", 42)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Astria\", 15)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Azra\", 14)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"BC Hydro EV\", 27)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Blink\", 1)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"ChargeLab\", 31)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"ChargePoint\", 2)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Circuit Électrique\", 4)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"CityVitae\", 52)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Co-op Connect\", 47)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"eCharge\", 23)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"EcoCharge\", 37)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Electrify America\", 26)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Electrify Canada\", 36)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"EV Link\", 18)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"EV Range\", 54)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"EVConnect\", 22)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"EVCS\", 43)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"EVduty\", 20)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"evGateway\", 44)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"EVgo\", 8)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"EVMatch\", 35)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"EVolve NY\", 38)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"EVSmart\", 45)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Flash\", 59)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Flo\", 3)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"FPL Evolution\", 41)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Francis Energy\", 39)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"GE\", 16)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Go Station\", 48)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Hypercharge\", 49)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Ivy\", 34)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Livingston Energy\", 46)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"myEVroute\", 21)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"NL Hydro\", 53)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Noodoe EV\", 30)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"OK2Charge\", 55)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"On the Run\", 58)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"OpConnect\", 9)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Petro-Canada\", 32)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"PHI\", 50)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Powerflex\", 40)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"RED E\", 60)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Rivian\", 51)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"SemaConnect\", 5)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Shell Recharge\", 6)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Sun Country Highway\", 11)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"SWTCH\", 28)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"SYNC EV\", 33)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Tesla\", 12)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Universal\", 56)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Voita\", 19)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"Webasto\", 7)"));
+      assert(db.execute("INSERT OR IGNORE INTO \"networks\" (name, network_id) VALUES (\"ZEF Energy\", 25)"));
+
+
 
 
     for(const auto& station_info : tmp)
@@ -113,7 +243,7 @@ void exec_stage(ScraperBase* scraper, int stage, const station_info_t& station_i
       try
       {
         key = 0;
-        sql::query q = std::move(db.build_query("SELECT key FROM stations WHERE key=?1")
+        sql::query q = std::move(db.build_query("SELECT station_id FROM stations WHERE station_id=?1")
                                    .arg(station_info.station_id));
         assert(q.valid() && q.lastError() == SQLITE_OK);
         assert(q.execute());
@@ -130,26 +260,94 @@ void exec_stage(ScraperBase* scraper, int stage, const station_info_t& station_i
       {
         try
         {
-          sql::query q = std::move(db.build_query("INSERT OR IGNORE INTO stations (key,latitude,longitude,name,street_number,street_name,city,state,country,zipcode,phone_number,times_accessible,price_string,payment_types,CHAdeMO,JPlug,J1772_combo)"
-                                                  " VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)")
-                                     .arg(station_info.station_id)
-                                     .arg(station_info.latitude)
-                                     .arg(station_info.longitude)
-                                     .arg(station_info.name)
-                                     .arg(station_info.street_number)
-                                     .arg(station_info.street_name)
-                                     .arg(station_info.city)
-                                     .arg(station_info.state)
-                                     .arg(station_info.country)
-                                     .arg(station_info.zipcode)
-                                     .arg(station_info.phone_number)
-                                     .arg(station_info.times_accessible)
-                                     .arg(station_info.price_string)
-                                     .arg(station_info.payment_types)
-                                     .arg(station_info.CHAdeMO)
-                                     .arg(station_info.JPlug)
-                                     .arg(station_info.J1772_combo));
-          assert(q.execute());
+          std::optional<std::vector<uint8_t>> port_ids;
+          if(!station_info.ports.empty())
+          {
+            port_ids.emplace(0);
+            for(const port_t& port : station_info.ports)
+            {
+              sql::query q = std::move(db.build_query("INSERT OR IGNORE INTO ports ("
+                                                      "port_id,"
+                                                      "station_id,"
+                                                      "level,"
+                                                      "connector,"
+                                                      "amp,"
+                                                      "kw,"
+                                                      "volt,"
+                                                      "price_string,"
+                                                      "payment_methods,"
+                                                      "network_id,"
+                                                      "display_name,"
+                                                      "network_port_id,"
+                                                      "weird)"
+                                                      " VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)")
+                                       .arg(port.port_id)
+                                       .arg(station_info.station_id)
+                                       .arg(port.level)
+                                       .arg(port.connector)
+                                       .arg(port.amp)
+                                       .arg(port.kw)
+                                       .arg(port.volt)
+                                       .arg(port.price_string)
+                                       .arg(port.payment_methods)
+                                       .arg(port.network_id)
+                                       .arg(port.display_name)
+                                       .arg(port.network_port_id)
+                                       .arg(port.weird));
+              assert(q.execute());
+
+              auto data = serialize(*port.port_id);
+              port_ids->insert(
+                    port_ids->end(),
+                    std::make_move_iterator(std::begin(data)),
+                    std::make_move_iterator(std::end(data))
+                  );
+            }
+          }
+
+          {
+            sql::query q = std::move(db.build_query("INSERT OR IGNORE INTO stations ("
+                                                    "station_id,"
+                                                    "latitude,"
+                                                    "longitude,"
+                                                    "name,"
+                                                    "description,"
+                                                    "street_number,"
+                                                    "street_name,"
+                                                    "city,"
+                                                    "state,"
+                                                    "country,"
+                                                    "zipcode,"
+                                                    "phone_number,"
+                                                    "URL,"
+                                                    "access_times,"
+                                                    "access_type,"
+                                                    "network_id,"
+                                                    "price_string,"
+                                                    "payment_methods,"
+                                                    "port_ids)"
+                                                    " VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)")
+                                      .arg(station_info.station_id)
+                                      .arg(station_info.latitude)
+                                      .arg(station_info.longitude)
+                                      .arg(station_info.name)
+                                      .arg(station_info.description)
+                                      .arg(station_info.street_number)
+                                      .arg(station_info.street_name)
+                                      .arg(station_info.city)
+                                      .arg(station_info.state)
+                                      .arg(station_info.country)
+                                      .arg(station_info.zipcode)
+                                      .arg(station_info.phone_number)
+                                      .arg(station_info.URL)
+                                      .arg(station_info.access_times)
+                                      .arg(station_info.access_type)
+                                      .arg(station_info.network_id)
+                                      .arg(station_info.price_string)
+                                      .arg(station_info.payment_methods)
+                                      .arg(port_ids));
+            assert(q.execute());
+          }
           ++insertions;
         }
         catch(std::string& error)
@@ -159,17 +357,22 @@ void exec_stage(ScraperBase* scraper, int stage, const station_info_t& station_i
       }
     }
   }
-
+/*
   if(scraper->StageCount() == stage)
     for(const auto& print_info : tmp)
       std::cout << print_info << std::endl;
+*/
+  if(stage == 1)
+  {
+    std::clog << "entries added: " << tmp.size() << std::endl;
+  }
 
   storage.merge(tmp);
 }
 
 int main(int argc, char* argv[])
 {
-#if 1
+#if 0
   std::list<station_info_t> rdata;
   sql::db db;
 
@@ -346,19 +549,20 @@ int main(int argc, char* argv[])
         for(const auto& station_info : indexed_data)
         {
           ++station_count;
-          std::clog << pair.first << ": station url: " << station_info.url << std::endl;
+//          std::clog << pair.first << ": station URL: " << *station_info.details_URL << std::endl;
 
           output.clear();
-          if(!station_info.post_data.empty())
+          if(station_info.post_data && !station_info.post_data->empty())
           {
-            std::clog << pair.first << ": post data: " << station_info.post_data << std::endl;
+
+            std::clog << pair.first << ": post data: " << *station_info.post_data << std::endl;
             request.setOpt(CURLOPT_POST, 1);
-            request.setOpt(CURLOPT_POSTFIELDS, station_info.post_data);
+            request.setOpt(CURLOPT_POSTFIELDS, *station_info.post_data);
           }
           else
             request.setOpt(CURLOPT_POST, 0);
 
-          if(request.setOpt(CURLOPT_URL, station_info.url) &&
+          if(request.setOpt(CURLOPT_URL, *station_info.details_URL) &&
              request.perform())
             exec_stage(scraper, 2, station_info, output, station_data, insertion_count);
           else if(request.getLastError() != CURLE_REMOTE_ACCESS_DENIED)
@@ -375,19 +579,19 @@ int main(int argc, char* argv[])
       {
         for(auto& station_info : station_data)
         {
-          std::clog << pair.first << ": station url: " << station_info.url << std::endl;
+//          std::clog << pair.first << ": station url: " << station_info.details_URL << std::endl;
 
           output.clear();
-          if(!station_info.post_data.empty())
+          if(!station_info.post_data->empty())
           {
-            std::clog << pair.first << ": post data: " << station_info.post_data << std::endl;
+//            std::clog << pair.first << ": post data: " << station_info.post_data << std::endl;
             request.setOpt(CURLOPT_POST, 1);
             request.setOpt(CURLOPT_POSTFIELDS, station_info.post_data);
           }
           else
             request.setOpt(CURLOPT_POST, 0);
 
-          if(request.setOpt(CURLOPT_URL, station_info.url) &&
+          if(request.setOpt(CURLOPT_URL, station_info.details_URL) &&
              request.perform())
             exec_stage(scraper, 3, station_info, output, download_data, insertion_count);
         }

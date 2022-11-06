@@ -6,24 +6,30 @@
 
 
 #include <iostream>
+#include <algorithm>
 
 #include <shortjson/shortjson.h>
 
 
+ChargehubScraper::ChargehubScraper(void) noexcept
+  : m_latitude(12.0)
+{
+
+}
+
 std::string ChargehubScraper::IndexURL(void) const noexcept
 {
   return "https://apiv2.chargehub.com/api/locationsmap?"
-         "latmin=-90.0" // + std::to_string(m_latitude) +
-         "&latmax=90.0" // + std::to_string(m_latitude + 0.1) +
+         "latmin=" + std::to_string(m_latitude) +
+         "&latmax=" + std::to_string(m_latitude + 0.25) +
          "&lonmin=-90.0&lonmax=90.0"
-         "&limit=9999&key=olitest&remove_networks=&remove_levels=&remove_connectors=&remove_other=0&above_power=";
+         "&limit=2000&key=olitest&remove_networks=&remove_levels=&remove_connectors=&remove_other=0&above_power=";
 }
 
 bool ChargehubScraper::IndexingComplete(void) const noexcept
 {
-//  m_latitude += 0.1;
-//  return m_latitude >= 90.0;
-  return true;
+  m_latitude += 0.25;
+  return m_latitude >= 55.0;
 }
 
 std::list<station_info_t> ChargehubScraper::ParseIndex(const ext::string &input)
@@ -33,8 +39,8 @@ std::list<station_info_t> ChargehubScraper::ParseIndex(const ext::string &input)
   {
     shortjson::node_t root = shortjson::Parse(input);
 
-    if(root.type == shortjson::Field::Object ||
-       root.type == shortjson::Field::Array)
+    if(root.type != shortjson::Field::Object &&
+       root.type != shortjson::Field::Array)
       throw 2;
 
     for(shortjson::node_t& child_node : root.toArray())
@@ -51,26 +57,11 @@ std::list<station_info_t> ChargehubScraper::ParseIndex(const ext::string &input)
       if(subnode.type != shortjson::Field::Integer)
         throw 5;
 
-      return_data.push_back({ uint32_t(subnode.toNumber()), // station_id
-                              0.0,  // latitude
-                              0.0,  // longitude
-                              "",   // name
-                              0,    // street_number
-                              "",   // street_name
-                              "",   // city
-                              "",   // state
-                              "",   // country
-                              "",    // zipcode
-                              "",   // phone_number
-                              "",   // times_accessible
-                              "",   // price_string
-                              "",   // payment_types
-                              0,    // CHAdeMO
-                              0,    // EV_Plug
-                              0,    // J1772_combo
-                              "https://apiv2.chargehub.com/api/stations/details?language=en&station_id=" + std::to_string(subnode.toNumber()), // url
-                              "",   // post_data
-                           });
+
+      return_data.push_back({
+                              .station_id = int32_t(subnode.toNumber()),
+                              .details_URL = "https://apiv2.chargehub.com/api/stations/details?language=en&station_id=" + std::to_string(subnode.toNumber())
+                            });
     }
   }
   catch(int exit_id)
@@ -82,18 +73,22 @@ std::list<station_info_t> ChargehubScraper::ParseIndex(const ext::string &input)
 }
 
 
-inline std::string safe_string(shortjson::node_t& node)
+inline std::optional<std::string> safe_string(shortjson::node_t& node)
 {
-  if(node.type != shortjson::Field::String)
-    throw 9;
-  return node.toString();
+  if(node.type == shortjson::Field::String)
+    return node.toString();
+  if(node.type == shortjson::Field::Null)
+    return std::optional<std::string>();
+  throw 20;
 }
 
-inline int32_t safe_int32(shortjson::node_t& node)
+inline std::optional<int32_t> safe_int32(shortjson::node_t& node)
 {
-  if(node.type != shortjson::Field::Integer)
-    throw 10;
-  return node.toNumber();
+  if(node.type == shortjson::Field::Integer)
+    return node.toNumber();
+  if(node.type == shortjson::Field::Null)
+    return std::optional<int32_t>();
+  throw 21;
 }
 
 inline double safe_float64(shortjson::node_t& node)
@@ -102,7 +97,51 @@ inline double safe_float64(shortjson::node_t& node)
     return node.toNumber();
   if(node.type == shortjson::Field::Float)
     return node.toFloat();
-  throw 11;
+  throw 22;
+}
+
+inline void connector_from_string(const std::optional<std::string>& str, port_t& port)
+{
+  if(str)
+  {
+    std::string out = *str;
+    std::transform(std::begin(out), std::end(out), std::begin(out),
+                   [](unsigned char c){ return std::tolower(c); });
+
+    if(out == "nema 5-15")
+      port.connector = Nema515;
+    else if(out == "nema 5-20")
+      port.connector = Nema520;
+    else if(out == "nema 14-50")
+      port.connector = Nema1450;
+    else if(out == "chademo")
+      port.connector = CHAdeMO;
+    else if(out == "ev plug (j1772)")
+      port.connector = J1772;
+    else if(out == "j1772 combo")
+      port.connector = J1772Combo;
+    else if(out == "ccs")
+      port.connector = CCS;
+    else if(out == "tesla" ||
+            out == "tesla supercharger")
+      port.connector = TeslaPlug;
+    else if(out == "ccs & ccs")
+    {
+      port.weird = true;
+      port.connector = CCS;
+    }
+    else if(out == "ccs & chademo")
+    {
+      port.weird = true;
+      port.connector = CCSorCHAdeMO;
+    }
+    else
+    {
+      port.weird = true;
+    }
+  }
+  else
+    port.weird = true;
 }
 
 std::list<station_info_t> ChargehubScraper::ParseStation(const station_info_t& station_info, const ext::string& input)
@@ -130,13 +169,15 @@ std::list<station_info_t> ChargehubScraper::ParseStation(const station_info_t& s
 
         if(subnode.identifier == "Id")
         {
-          if(station.station_id != uint32_t(safe_int32(subnode)))
+          if(station.station_id != safe_int32(subnode))
             throw 4;
         }
         else if(subnode.identifier == "LocName")
           station.name = safe_string(subnode);
+        else if(subnode.identifier == "LocDesc")
+          station.description = safe_string(subnode);
         else if(subnode.identifier == "StreetNo")
-          station.street_number = uint16_t(safe_int32(subnode));
+          station.street_number = safe_int32(subnode);
         else if(subnode.identifier == "Street")
           station.street_name = safe_string(subnode);
         else if(subnode.identifier == "City")
@@ -153,44 +194,70 @@ std::list<station_info_t> ChargehubScraper::ParseStation(const station_info_t& s
           station.longitude = safe_float64(subnode);
         else if(subnode.identifier == "Phone")
           station.phone_number = safe_string(subnode);
+        else if(subnode.identifier == "Web")
+          station.URL = safe_string(subnode);
         else if(subnode.identifier == "AccessTime")
-          station.times_accessible = safe_string(subnode);
-//        else if(subchild_node.identifier == "PriceNumber")
-//          station.price_number = safe_float64(subnode);
+          station.access_times = safe_string(subnode);
+        else if(subnode.identifier == "AccessType")
+          station.access_type = safe_string(subnode);
+        else if(subnode.identifier == "NetworkId")
+          station.network_id = safe_int32(subnode);
         else if(subnode.identifier == "PriceString")
           station.price_string = safe_string(subnode);
         else if(subnode.identifier == "PaymentMethods")
-          station.payment_types = safe_string(subnode);
-        else if(subnode.identifier == "PriceString")
-          station.price_string = safe_string(subnode);
-        else if(subnode.identifier == "PriceString")
-          station.price_string = safe_string(subnode);
+          station.payment_methods = safe_string(subnode);
         else if(subnode.identifier == "PlugsArray")
         {
           if(subnode.type != shortjson::Field::Object &&
              subnode.type != shortjson::Field::Array)
             throw 5;
 
-          for(auto& sub2node : subnode.toArray())
+          for(auto& plugnode : subnode.toArray())
           {
-            if(sub2node.type != shortjson::Field::Object &&
-               sub2node.type != shortjson::Field::Array)
+            port_t port;
+            port.weird = false;
+            if(plugnode.type != shortjson::Field::Object &&
+               plugnode.type != shortjson::Field::Array)
               throw 6;
 
-            shortjson::node_t ports;
-            if(!shortjson::FindNode(sub2node, ports, "Ports"))
-              throw 7;
+            for(auto& plug_element : plugnode.toArray())
+            {
+              if(plug_element.identifier == "Level")
+                port.level = safe_int32(plug_element);
+              else if(plug_element.identifier == "Network")
+                port.network_id = safe_int32(plug_element);
+              else if(plug_element.identifier == "Name")
+                connector_from_string(safe_string(plug_element), port);
+              else if(plug_element.identifier == "PriceString")
+                port.price_string = safe_string(plug_element);
+              else if(plug_element.identifier == "PaymentMethods")
+                port.payment_methods = safe_string(plug_element);
+              else if(plug_element.identifier == "Amp")
+                port.amp = safe_string(plug_element);
+              else if(plug_element.identifier == "Kw")
+                port.kw = safe_string(plug_element);
+              else if(plug_element.identifier == "Volt")
+                port.volt = safe_string(plug_element);
+            }
 
-            std::string name;
-            if(!shortjson::FindString(sub2node, name, "Name"))
-              throw 8;
+            shortjson::node_t portsnode;
+            if(!shortjson::FindNode(plugnode, portsnode, "Ports"))
+              throw 9;
 
-            if(name == "CHAdeMO")
-              station.CHAdeMO = ports.toArray().size();
-            else if(name == "EV Plug (J1772)")
-              station.JPlug = ports.toArray().size();
-            else if(name == "J1772 Combo")
-              station.J1772_combo = ports.toArray().size();
+            for(auto& portnode : portsnode.toArray())
+            {
+              port_t thisport = port;
+              for(shortjson::node_t& port_element : portnode.toArray())
+              {
+                if(port_element.identifier == "portId")
+                  thisport.port_id = safe_int32(port_element);
+                else if(port_element.identifier == "netPortId")
+                  thisport.network_port_id = safe_string(port_element);
+                else if(port_element.identifier == "displayName")
+                  thisport.display_name = safe_string(port_element);
+              }
+              station.ports.push_back(thisport);
+            }
           }
         }
       }

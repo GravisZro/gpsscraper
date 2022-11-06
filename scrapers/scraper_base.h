@@ -4,36 +4,59 @@
 #include "utilities.h"
 #include <unordered_set>
 #include <optional>
+#include <vector>
 
 std::string url_encode(const std::string& source, std::unordered_set<char> exceptions = std::unordered_set<char>()) noexcept;
 std::string unescape(const std::string& source) noexcept;
 
+struct port_t
+{
+  std::optional<int32_t> port_id;
+
+  std::optional<int32_t> level;
+  std::optional<int32_t> connector;
+  std::optional<std::string> amp;
+  std::optional<std::string> kw;
+  std::optional<std::string> volt;
+
+  std::optional<std::string> price_string;
+  std::optional<std::string> payment_methods;
+
+  std::optional<int32_t> network_id;
+  std::optional<std::string> display_name;
+  std::optional<std::string> network_port_id;
+  bool weird;
+};
+
 struct station_info_t
 {
-  uint32_t station_id;
-  double latitude;
-  double longitude;
+  int32_t station_id;
+  std::optional<double> latitude;
+  std::optional<double> longitude;
 
-  std::string name;
-  std::string street_number;
-  std::string street_name;
-  std::string city;
-  std::string state;
-  std::string country;
-  std::string zipcode;
+  std::optional<std::string> name;
+  std::optional<std::string> description;
+  std::optional<uint32_t> street_number;
+  std::optional<std::string> street_name;
+  std::optional<std::string> city;
+  std::optional<std::string> state;
+  std::optional<std::string> country;
+  std::optional<std::string> zipcode;
 
   std::optional<std::string> phone_number;
-  std::optional<std::string> times_accessible;
-  std::optional<std::string> price_string;
-  std::optional<std::string> payment_types;
+  std::optional<std::string> URL;
+  std::optional<std::string> access_times;
+  std::optional<std::string> access_type;
 
-  std::optional<uint8_t> CHAdeMO;
-  std::optional<uint8_t> JPlug;
-  std::optional<uint8_t> J1772_combo;
+  std::optional<std::string> price_string;
+  std::optional<std::string> payment_methods;
+  std::optional<int32_t> network_id;
+
+  std::vector<port_t> ports;
 
   // discarded info
-  std::string url;
-  std::string post_data;
+  std::optional<std::string> details_URL;
+  std::optional<std::string> post_data;
 
   constexpr bool operator < (const station_info_t& other) const noexcept { return station_id < other.station_id; }
 };
