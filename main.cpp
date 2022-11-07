@@ -69,7 +69,7 @@ std::ostream & operator << (std::ostream &out, const station_info_t& station_inf
       << '"' << station_info.access_times << '"' << ','
 //      << station_info.price_number << ','
       << '"' << station_info.price_string << '"' << ','
-      << '"' << station_info.payment_methods << '"' << ','
+      << '"' << station_info.initialization << '"' << ','
          ;
 
   return out;
@@ -118,7 +118,7 @@ void exec_stage(ScraperBase* scraper, int stage, const station_info_t& station_i
               "latitude" REAL NOT NULL,
               "longitude" REAL NOT NULL,
               "name" TEXT NOT NULL,
-              "description" TEXT NOT NULL,
+              "description" TEXT DEFAULT NULL,
               "street_number" INTEGER,
               "street_name" TEXT,
               "city" TEXT,
@@ -132,7 +132,7 @@ void exec_stage(ScraperBase* scraper, int stage, const station_info_t& station_i
 
               "network_id" INTEGER DEFAULT NULL,
               "price_string" TEXT DEFAULT NULL,
-              "payment_methods" TEXT DEFAULT NULL,
+              "initialization" TEXT DEFAULT NULL,
 
               "port_ids" BLOB DEFAULT NULL,
               PRIMARY KEY("station_id")
@@ -152,8 +152,8 @@ void exec_stage(ScraperBase* scraper, int stage, const station_info_t& station_i
               "volt" TEXT DEFAULT NULL,
 
               "price_string" TEXT DEFAULT NULL,
-              "payment_methods" TEXT DEFAULT NULL,
-              "price_free" BOOLEAN DEFAULT FALSE,
+              "initialization" TEXT DEFAULT NULL,
+              "price_free" BOOLEAN DEFAULT NULL,
               "price_unit" INTEGER DEFAULT NULL,
               "price_initial" FLOAT DEFAULT NULL,
               "price_per_KWh" FLOAT DEFAULT NULL,
@@ -275,7 +275,7 @@ void exec_stage(ScraperBase* scraper, int stage, const station_info_t& station_i
                                                       "kw,"
                                                       "volt,"
                                                       "price_string,"
-                                                      "payment_methods,"
+                                                      "initialization,"
                                                       "network_id,"
                                                       "display_name,"
                                                       "network_port_id,"
@@ -289,7 +289,7 @@ void exec_stage(ScraperBase* scraper, int stage, const station_info_t& station_i
                                        .arg(port.kw)
                                        .arg(port.volt)
                                        .arg(port.price_string)
-                                       .arg(port.payment_methods)
+                                       .arg(port.initialization)
                                        .arg(port.network_id)
                                        .arg(port.display_name)
                                        .arg(port.network_port_id)
@@ -324,7 +324,7 @@ void exec_stage(ScraperBase* scraper, int stage, const station_info_t& station_i
                                                     "access_type,"
                                                     "network_id,"
                                                     "price_string,"
-                                                    "payment_methods,"
+                                                    "initialization,"
                                                     "port_ids)"
                                                     " VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)")
                                       .arg(station_info.station_id)
@@ -344,7 +344,7 @@ void exec_stage(ScraperBase* scraper, int stage, const station_info_t& station_i
                                       .arg(station_info.access_type)
                                       .arg(station_info.network_id)
                                       .arg(station_info.price_string)
-                                      .arg(station_info.payment_methods)
+                                      .arg(station_info.initialization)
                                       .arg(port_ids));
             assert(q.execute());
           }

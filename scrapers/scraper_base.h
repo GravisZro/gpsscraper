@@ -20,7 +20,7 @@ struct port_t
   std::optional<std::string> volt;
 
   std::optional<std::string> price_string;
-  std::optional<std::string> payment_methods;
+  std::optional<std::string> initialization;
 
   std::optional<int32_t> network_id;
   std::optional<std::string> display_name;
@@ -49,7 +49,7 @@ struct station_info_t
   std::optional<std::string> access_type;
 
   std::optional<std::string> price_string;
-  std::optional<std::string> payment_methods;
+  std::optional<std::string> initialization;
   std::optional<int32_t> network_id;
 
   std::vector<port_t> ports;

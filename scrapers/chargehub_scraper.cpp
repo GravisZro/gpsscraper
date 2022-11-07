@@ -76,7 +76,7 @@ std::list<station_info_t> ChargehubScraper::ParseIndex(const ext::string &input)
 inline std::optional<std::string> safe_string(shortjson::node_t& node)
 {
   if(node.type == shortjson::Field::String)
-    return node.toString();
+    return !node.toString().empty() ? node.toString() : std::optional<std::string>();
   if(node.type == shortjson::Field::Null)
     return std::optional<std::string>();
   throw 20;
@@ -125,12 +125,7 @@ inline void connector_from_string(const std::optional<std::string>& str, port_t&
     else if(out == "tesla" ||
             out == "tesla supercharger")
       port.connector = TeslaPlug;
-    else if(out == "ccs & ccs")
-    {
-      port.weird = true;
-      port.connector = CCS;
-    }
-    else if(out == "ccs & chademo")
+    else if(out == "ccs & chademo" || out == "ccs & ccs")
     {
       port.weird = true;
       port.connector = CCSorCHAdeMO;
@@ -205,7 +200,7 @@ std::list<station_info_t> ChargehubScraper::ParseStation(const station_info_t& s
         else if(subnode.identifier == "PriceString")
           station.price_string = safe_string(subnode);
         else if(subnode.identifier == "PaymentMethods")
-          station.payment_methods = safe_string(subnode);
+          station.initialization = safe_string(subnode);
         else if(subnode.identifier == "PlugsArray")
         {
           if(subnode.type != shortjson::Field::Object &&
@@ -231,7 +226,7 @@ std::list<station_info_t> ChargehubScraper::ParseStation(const station_info_t& s
               else if(plug_element.identifier == "PriceString")
                 port.price_string = safe_string(plug_element);
               else if(plug_element.identifier == "PaymentMethods")
-                port.payment_methods = safe_string(plug_element);
+                port.initialization = safe_string(plug_element);
               else if(plug_element.identifier == "Amp")
                 port.amp = safe_string(plug_element);
               else if(plug_element.identifier == "Kw")
