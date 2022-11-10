@@ -81,7 +81,8 @@ enum network : uint8_t
 class ChargehubScraper : public ScraperBase
 {
 public:
-  ChargehubScraper(void) noexcept;
+  ChargehubScraper(double starting_latitude = 12.5,
+                   double stopping_latitude = 55.0) noexcept;
 
   uint8_t StageCount(void) const noexcept { return 2; }
 
@@ -92,7 +93,9 @@ public:
   std::list<station_info_t> ParseStation(const station_info_t& station_info, const ext::string& input);
 
 private:
+  static constexpr double m_latitude_step = 0.25;
   mutable double m_latitude;
+  double m_end_latitude;
 };
 
 

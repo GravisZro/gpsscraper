@@ -11,25 +11,26 @@
 #include <shortjson/shortjson.h>
 
 
-ChargehubScraper::ChargehubScraper(void) noexcept
-  : m_latitude(12.0)
+ChargehubScraper::ChargehubScraper(double starting_latitude,
+                                   double stopping_latitude) noexcept
+  : m_latitude(starting_latitude),
+    m_end_latitude(stopping_latitude)
 {
-
 }
 
 std::string ChargehubScraper::IndexURL(void) const noexcept
 {
   return "https://apiv2.chargehub.com/api/locationsmap?"
          "latmin=" + std::to_string(m_latitude) +
-         "&latmax=" + std::to_string(m_latitude + 0.25) +
+         "&latmax=" + std::to_string(m_latitude + m_latitude_step) +
          "&lonmin=-90.0&lonmax=90.0"
          "&limit=2000&key=olitest&remove_networks=&remove_levels=&remove_connectors=&remove_other=0&above_power=";
 }
 
 bool ChargehubScraper::IndexingComplete(void) const noexcept
 {
-  m_latitude += 0.25;
-  return m_latitude >= 55.0;
+  m_latitude += m_latitude_step;
+  return m_latitude >= m_end_latitude;
 }
 
 std::list<station_info_t> ChargehubScraper::ParseIndex(const ext::string &input)
@@ -73,10 +74,17 @@ std::list<station_info_t> ChargehubScraper::ParseIndex(const ext::string &input)
 }
 
 
+inline std::optional<std::string> validate_string(const std::string& str)
+{
+  auto pos = std::find_if_not(std::begin(str), std::end(str),
+                 [](unsigned char c){ return std::isspace(c); });
+  return pos == std::end(str) ? std::optional<std::string>() : str;
+}
+
 inline std::optional<std::string> safe_string(shortjson::node_t& node)
 {
   if(node.type == shortjson::Field::String)
-    return !node.toString().empty() ? node.toString() : std::optional<std::string>();
+    return validate_string(node.toString());
   if(node.type == shortjson::Field::Null)
     return std::optional<std::string>();
   throw 20;
@@ -139,6 +147,38 @@ inline void connector_from_string(const std::optional<std::string>& str, port_t&
     port.weird = true;
 }
 
+std::optional<std::string> get_access_restrictions(std::optional<std::string> str)
+{
+  if(str == "24 Hours")
+    return std::optional<std::string>();
+  return str;
+}
+
+std::optional<bool> get_access_public(std::optional<std::string> str)
+{
+  if(str == "Public")
+    return true;
+  if(str == "Restricted")
+    return false;
+  if(str == "Unknown")
+    return std::optional<bool>();
+  throw 30;
+}
+
+
+
+std::optional<bool> get_price_free(std::optional<std::string>& str)
+{
+  if(!str || str == "Cost: Unknown")
+    return std::optional<bool>();
+  if(str == "Cost: Free")
+  {
+    str.reset();
+    return true;
+  }
+  return false;
+}
+
 std::list<station_info_t> ChargehubScraper::ParseStation(const station_info_t& station_info, const ext::string& input)
 {
   (void)station_info;
@@ -192,13 +232,16 @@ std::list<station_info_t> ChargehubScraper::ParseStation(const station_info_t& s
         else if(subnode.identifier == "Web")
           station.URL = safe_string(subnode);
         else if(subnode.identifier == "AccessTime")
-          station.access_times = safe_string(subnode);
+          station.access_restrictions = get_access_restrictions(safe_string(subnode));
         else if(subnode.identifier == "AccessType")
-          station.access_type = safe_string(subnode);
+          station.access_public = get_access_public(safe_string(subnode));
         else if(subnode.identifier == "NetworkId")
           station.network_id = safe_int32(subnode);
         else if(subnode.identifier == "PriceString")
+        {
           station.price_string = safe_string(subnode);
+          station.price_free = get_price_free(station.price_string);
+        }
         else if(subnode.identifier == "PaymentMethods")
           station.initialization = safe_string(subnode);
         else if(subnode.identifier == "PlugsArray")
@@ -224,7 +267,11 @@ std::list<station_info_t> ChargehubScraper::ParseStation(const station_info_t& s
               else if(plug_element.identifier == "Name")
                 connector_from_string(safe_string(plug_element), port);
               else if(plug_element.identifier == "PriceString")
+              {
                 port.price_string = safe_string(plug_element);
+                port.price_free = get_price_free(port.price_string);
+              }
+
               else if(plug_element.identifier == "PaymentMethods")
                 port.initialization = safe_string(plug_element);
               else if(plug_element.identifier == "Amp")

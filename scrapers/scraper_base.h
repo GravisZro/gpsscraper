@@ -19,6 +19,7 @@ struct port_t
   std::optional<std::string> kw;
   std::optional<std::string> volt;
 
+  std::optional<bool> price_free;
   std::optional<std::string> price_string;
   std::optional<std::string> initialization;
 
@@ -31,8 +32,8 @@ struct port_t
 struct station_info_t
 {
   int32_t station_id;
-  std::optional<double> latitude;
-  std::optional<double> longitude;
+  double latitude;
+  double longitude;
 
   std::optional<std::string> name;
   std::optional<std::string> description;
@@ -45,9 +46,12 @@ struct station_info_t
 
   std::optional<std::string> phone_number;
   std::optional<std::string> URL;
-  std::optional<std::string> access_times;
-  std::optional<std::string> access_type;
+  //std::optional<std::string> access_times;
+  //std::optional<std::string> access_type;
+  std::optional<bool> access_public;
+  std::optional<std::string> access_restrictions;
 
+  std::optional<bool> price_free;
   std::optional<std::string> price_string;
   std::optional<std::string> initialization;
   std::optional<int32_t> network_id;
@@ -58,7 +62,9 @@ struct station_info_t
   std::optional<std::string> details_URL;
   std::optional<std::string> post_data;
 
-  constexpr bool operator < (const station_info_t& other) const noexcept { return station_id < other.station_id; }
+  constexpr bool operator  < (const station_info_t& other) const noexcept { return latitude  < other.latitude &&
+                                                                                   longitude < other.longitude; }
+  constexpr bool operator == (const station_info_t& other) const noexcept { return station_id == other.station_id; }
 };
 
 class ScraperBase
