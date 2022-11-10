@@ -59,14 +59,13 @@ std::vector<uint8_t> serialize(int32_t data)
   return rval;
 }
 
-void db_init(void)
+void db_init(sql::db& db, std::string_view filename)
 {
   using namespace std::literals;
 
-  sql::db db;
-  assert(db.open(dbfile));
-  //assert(db.execute("PRAGMA synchronous = OFF"));
-  //assert(db.execute("PRAGMA journal_mode = MEMORY"));
+  assert(db.open(filename));
+  assert(db.execute("PRAGMA synchronous = OFF"));
+  assert(db.execute("PRAGMA journal_mode = MEMORY"));
 
   std::string_view stations_table_desc = R"(
             "station_id" INTEGER NOT NULL UNIQUE,
@@ -200,7 +199,7 @@ void db_init(void)
   assert(db.execute(R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("ZEF Energy", 25))"));
 }
 
-void exec_stage(ScraperBase* scraper, int stage, const station_info_t& station_info, const std::string& page_text, std::list<station_info_t>& storage, uintptr_t& insertions)
+void exec_stage(sql::db& db, ScraperBase* scraper, int stage, const station_info_t& station_info, const std::string& page_text, std::list<station_info_t>& storage, uintptr_t& insertions)
 {
   std::list<station_info_t> tmp;
   switch (stage)
@@ -219,11 +218,8 @@ void exec_stage(ScraperBase* scraper, int stage, const station_info_t& station_i
   if(stage == 1)
   {
     uint32_t skipped = 0;
-    sql::db db;
-    assert(db.open(dbfile));
 
     for(auto pos = std::begin(tmp); pos != std::end(tmp);)
-    //for(const auto& station_info : tmp)
     {
       try
       {
@@ -253,14 +249,10 @@ void exec_stage(ScraperBase* scraper, int stage, const station_info_t& station_i
   if(scraper->StageCount() == stage)
   {
     std::list<station_info_t> rdata;
-    sql::db db;
-    assert(db.open(dbfile));
-
-
 
     for(const auto& station_info : tmp)
     {
-      //std::clog << "chargehub" << " - latitude: " << station_info.latitude<< " - longitude: " << station_info.longitude  << std::endl;
+      std::clog << "chargehub" << " - latitude: " << station_info.latitude<< " - longitude: " << station_info.longitude  << std::endl;
       try
       {
         std::optional<std::vector<uint8_t>> port_ids;
@@ -300,7 +292,6 @@ void exec_stage(ScraperBase* scraper, int stage, const station_info_t& station_i
                                      .arg(port.network_port_id, sql::reference)
                                      .arg(port.weird));
               assert(q.execute());
-
 
             auto data = serialize(*port.port_id);
             port_ids->insert(
@@ -441,7 +432,8 @@ int main(int argc, char* argv[])
   }
   else
   {
-    db_init();
+    sql::db db;
+    db_init(db, dbfile);
     uintptr_t station_count = 0;
     uintptr_t total_insertions = 0;
     uintptr_t insertion_count = 0;
@@ -470,7 +462,7 @@ int main(int argc, char* argv[])
            request.perform())
         {
 //          cookie_calculator(request, scraper->IndexURL(), output);
-          exec_stage(scraper, 1, station_info_t(), output, indexed_data, insertion_count);
+          exec_stage(db, scraper, 1, station_info_t(), output, indexed_data, insertion_count);
         }
         else
         {
@@ -502,7 +494,7 @@ int main(int argc, char* argv[])
 
           if(request.setOpt(CURLOPT_URL, *station_info.details_URL) &&
              request.perform())
-            exec_stage(scraper, 2, station_info, output, station_data, insertion_count);
+            exec_stage(db, scraper, 2, station_info, output, station_data, insertion_count);
           else if(request.getLastError() != CURLE_REMOTE_ACCESS_DENIED)
           {
             std::cerr << "scraper: " << pair.first << std::endl
@@ -530,7 +522,7 @@ int main(int argc, char* argv[])
 
           if(request.setOpt(CURLOPT_URL, station_info.details_URL) &&
              request.perform())
-            exec_stage(scraper, 3, station_info, output, download_data, insertion_count);
+            exec_stage(db, scraper, 3, station_info, output, download_data, insertion_count);
         }
       }
 
