@@ -22,8 +22,6 @@
 
 constexpr std::string_view dbfile = "stations.db";
 
-//static sql::db db;
-
 
 std::size_t curl_to_string(char* data, std::size_t size, std::size_t nmemb, std::string* string)
 {
@@ -123,11 +121,7 @@ void db_init(sql::db& db, std::string_view filename)
            "URL" TEXT NOT NULL UNIQUE,
            PRIMARY KEY("URL_id" AUTOINCREMENT)
       )";
-/*
-  assert(db.execute("CREATE TABLE IF NOT EXISTS RAM.stations ("s.append(stations_table_desc) + ")"));
-  assert(db.execute("CREATE TABLE IF NOT EXISTS RAM.ports ("s.append(ports_table_desc) + ")"));
-  assert(db.execute("CREATE TABLE IF NOT EXISTS RAM.URLs ("s.append(URLs_table_desc) + ")"));
-*/
+
   assert(db.execute("CREATE TABLE IF NOT EXISTS stations ("s.append(stations_table_desc) + ")"));
   assert(db.execute("CREATE TABLE IF NOT EXISTS ports ("s.append(ports_table_desc) + ")"));
   assert(db.execute("CREATE TABLE IF NOT EXISTS URLs ("s.append(URLs_table_desc) + ")"));
@@ -515,7 +509,7 @@ int main(int argc, char* argv[])
           {
 //            std::clog << pair.first << ": post data: " << station_info.post_data << std::endl;
             request.setOpt(CURLOPT_POST, 1);
-            request.setOpt(CURLOPT_POSTFIELDS, station_info.post_data);
+            //request.setOpt(CURLOPT_POSTFIELDS, station_info.post_data);
           }
           else
             request.setOpt(CURLOPT_POST, 0);
