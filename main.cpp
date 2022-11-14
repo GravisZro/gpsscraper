@@ -411,21 +411,23 @@ int main(int argc, char* argv[])
     }
   }
 
-  std::cerr << "scrapers: ";
-  for(const auto& pair : scrapers)
-    std::cerr << pair.first << ", ";
-  std::cerr << std::endl;
-
-//  request.setOpt(CURLOPT_COOKIEFILE, ""); // enable cookies
-  request.setOpt(CURLOPT_USERAGENT, "Mozilla/5.0 (X11; Linux x86_64; rv:81.0) Gecko/20100101 Firefox/81.0");
-  request.setOpt(CURLOPT_TCP_KEEPALIVE, 1);
-
   if(scrapers.empty())
   {
-
+    std::cerr << "No scrappers queued!" << std::endl
+              << "Exiting." << std::endl;
   }
   else
-  {
+  {    
+    std::cerr << "Scraper queue: ";
+    for(const auto& pair : scrapers)
+      std::cerr << pair.first << ", ";
+    std::cerr << std::endl;
+
+  //  request.setOpt(CURLOPT_COOKIEFILE, ""); // enable cookies
+    request.setOpt(CURLOPT_USERAGENT, "Mozilla/5.0 (X11; Linux x86_64; rv:81.0) Gecko/20100101 Firefox/81.0");
+    request.setOpt(CURLOPT_TCP_KEEPALIVE, 1);
+
+
     sql::db db;
     db_init(db, dbfile);
     uintptr_t station_count = 0;
@@ -448,8 +450,6 @@ int main(int argc, char* argv[])
       do
       {
         std::clog << pair.first << ": index url: " << scraper->IndexURL() << std::endl;
-
-
 
         output.clear();
         if(request.setOpt(CURLOPT_URL, scraper->IndexURL()) &&
@@ -509,7 +509,7 @@ int main(int argc, char* argv[])
           {
 //            std::clog << pair.first << ": post data: " << station_info.post_data << std::endl;
             request.setOpt(CURLOPT_POST, 1);
-            //request.setOpt(CURLOPT_POSTFIELDS, station_info.post_data);
+//            request.setOpt(CURLOPT_POSTFIELDS, station_info.post_data);
           }
           else
             request.setOpt(CURLOPT_POST, 0);
@@ -519,7 +519,6 @@ int main(int argc, char* argv[])
             exec_stage(db, scraper, 3, station_info, output, download_data, insertion_count);
         }
       }
-
 
       std::clog << pair.first << " stage 1 entries: " << indexed_data.size() << std::endl;
       if(scraper->StageCount() >= 2)
