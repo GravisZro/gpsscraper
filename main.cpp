@@ -2,6 +2,7 @@
 #include <sys/stat.h>
 
 #include <list>
+#include <stack>
 #include <string>
 #include <iostream>
 #include <algorithm>
@@ -12,8 +13,7 @@
 #include <simplified/simple_curl.h>
 
 //#include "cookie_calculator.h"
-
-#include <scrapers/utilities.h>
+//#include <scrapers/utilities.h>
 
 #include <scrapers/scraper_base.h>
 #include <scrapers/chargehub_scraper.h>
@@ -48,13 +48,8 @@ std::ostream & operator << (std::ostream &out, const std::optional<T>& value) no
 
 std::vector<uint8_t> serialize(int32_t data)
 {
-  std::vector<uint8_t> rval;
-  uint32_t d = data;
-  rval.push_back((d >> 24) & 0xFF);
-  rval.push_back((d >> 16) & 0xFF);
-  rval.push_back((d >>  8) & 0xFF);
-  rval.push_back(d & 0xFF);
-  return rval;
+  auto a = reinterpret_cast<uint8_t*>(&data);
+  return std::vector<uint8_t>({ a[0], a[1], a[2], a[3] });
 }
 
 void db_init(sql::db& db, std::string_view filename)
@@ -66,74 +61,80 @@ void db_init(sql::db& db, std::string_view filename)
   assert(db.execute("PRAGMA journal_mode = MEMORY"));
 
   std::string_view stations_table_desc = R"(
-            "station_id" INTEGER NOT NULL UNIQUE,
-            "latitude" REAL NOT NULL,
-            "longitude" REAL NOT NULL,
-            "name" TEXT NOT NULL,
-            "description" TEXT DEFAULT NULL,
-            "street_number" INTEGER,
-            "street_name" TEXT,
-            "city" TEXT,
-            "state" TEXT,
-            "country" TEXT,
-            "zipcode" TEXT,
-            "phone_number" TEXT DEFAULT NULL,
-            "URL_id" INTEGER DEFAULT NULL,
-            "access_public" BOOLEAN DEFAULT NULL,
-            "access_restrictions" TEXT DEFAULT NULL,
+    CREATE TABLE IF NOT EXISTS stations (
+      "station_id" INTEGER DEFAULT NULL,
+      "network_id" INTEGER DEFAULT NULL,
+      "network_station_id" INTEGER DEFAULT NULL,
+      "latitude" REAL NOT NULL,
+      "longitude" REAL NOT NULL,
+      "name" TEXT NOT NULL,
+      "description" TEXT DEFAULT NULL,
+      "street_number" INTEGER,
+      "street_name" TEXT,
+      "city" TEXT,
+      "state" TEXT,
+      "country" TEXT,
+      "zipcode" TEXT,
+      "phone_number" TEXT DEFAULT NULL,
+      "URL_id" INTEGER DEFAULT NULL,
+      "access_public" BOOLEAN DEFAULT NULL,
+      "access_restrictions" TEXT DEFAULT NULL,
 
-            "network_id" INTEGER DEFAULT NULL,
-            "price_free" BOOLEAN DEFAULT NULL,
-            "price_string" TEXT DEFAULT NULL,
-            "initialization" TEXT DEFAULT NULL,
+      "price_free" BOOLEAN DEFAULT NULL,
+      "price_string" TEXT DEFAULT NULL,
+      "initialization" TEXT DEFAULT NULL,
 
-            "port_ids" BLOB DEFAULT NULL,
-            PRIMARY KEY("station_id")
-      )";
+      "port_ids" BLOB DEFAULT NULL
+    ))";
 
   std::string_view ports_table_desc = R"(
-            "port_id" INTEGER NOT NULL UNIQUE,
-            "station_id" INTEGER NOT NULL,
+    CREATE TABLE IF NOT EXISTS ports (
+      "station_id" INTEGER DEFAULT NULL,
+      "port_id" INTEGER DEFAULT NULL,
+      "network_id" INTEGER DEFAULT NULL,
+      "network_station_id" INTEGER DEFAULT NULL,
+      "network_port_id" INTEGER DEFAULT NULL,
 
-            "level" INTEGER NOT NULL,
-            "connector" INTEGER DEFAULT NULL,
-            "amp" TEXT DEFAULT NULL,
-            "kw" TEXT DEFAULT NULL,
-            "volt" TEXT DEFAULT NULL,
+      "power_id" INTEGER NOT NULL,
 
-            "price_string" TEXT DEFAULT NULL,
-            "initialization" TEXT DEFAULT NULL,
-            "price_free" BOOLEAN DEFAULT NULL,
-            "price_unit" INTEGER DEFAULT NULL,
-            "price_initial" FLOAT DEFAULT NULL,
-            "price_per_KWh" FLOAT DEFAULT NULL,
+      "price_string" TEXT DEFAULT NULL,
+      "initialization" TEXT DEFAULT NULL,
+      "price_free" BOOLEAN DEFAULT NULL,
+      "price_unit" INTEGER DEFAULT NULL,
+      "price_initial" FLOAT DEFAULT NULL,
+      "price_per_kWh" FLOAT DEFAULT NULL,
 
-            "network_id" INTEGER DEFAULT NULL,
-            "display_name" TEXT DEFAULT NULL,
-            "network_port_id" TEXT DEFAULT NULL,
+      "display_name" TEXT DEFAULT NULL,
+      "weird" BOOLEAN DEFAULT FALSE
+    ))";
 
-            "weird" BOOLEAN DEFAULT FALSE,
-            PRIMARY KEY("port_id")
-      )";
+  std::string_view power_table_desc = R"(
+    CREATE TABLE IF NOT EXISTS power (
+      "power_id" INTEGER PRIMARY KEY,
+      "level" INTEGER NOT NULL,
+      "connector" INTEGER DEFAULT NULL,
+      "amp" TEXT DEFAULT NULL,
+      "kW" TEXT DEFAULT NULL,
+      "volt" TEXT DEFAULT NULL
+    ))";
 
   std::string_view URLs_table_desc = R"(
-           "URL_id" INTEGER NOT NULL DEFAULT 0 UNIQUE,
-           "URL" TEXT NOT NULL UNIQUE,
-           PRIMARY KEY("URL_id" AUTOINCREMENT)
-      )";
+    CREATE TABLE IF NOT EXISTS URLs (
+      "URL_id" INTEGER PRIMARY KEY,
+      "URL" TEXT NOT NULL UNIQUE
+    ))";
 
-  assert(db.execute("CREATE TABLE IF NOT EXISTS stations ("s.append(stations_table_desc) + ")"));
-  assert(db.execute("CREATE TABLE IF NOT EXISTS ports ("s.append(ports_table_desc) + ")"));
-  assert(db.execute("CREATE TABLE IF NOT EXISTS URLs ("s.append(URLs_table_desc) + ")"));
+  std::string_view networks_table_desc = R"(
+    CREATE TABLE IF NOT EXISTS networks (
+      "network_id" INTEGER PRIMARY KEY,
+      "name" TEXT NOT NULL
+    ))";
 
-  assert(db.execute(
-           R"(
-          CREATE TABLE IF NOT EXISTS networks (
-            "network_id" INTEGER NOT NULL UNIQUE,
-            "name" TEXT NOT NULL,
-            PRIMARY KEY("network_id")
-          )
-          )"));
+  assert(db.execute(stations_table_desc));
+  assert(db.execute(ports_table_desc));
+  assert(db.execute(power_table_desc));
+  assert(db.execute(URLs_table_desc));
+  assert(db.execute(networks_table_desc));
 
   assert(db.execute(R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Non-Networked", 17))"));
   assert(db.execute(R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Unknown", 0))"));
@@ -193,178 +194,216 @@ void db_init(sql::db& db, std::string_view filename)
   assert(db.execute(R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("ZEF Energy", 25))"));
 }
 
-void exec_stage(sql::db& db, ScraperBase* scraper, int stage, const station_info_t& station_info, const std::string& page_text, std::list<station_info_t>& storage, uintptr_t& insertions)
+bool exists_in_db(sql::db& db, const station_info_t& data)
 {
-  std::list<station_info_t> tmp;
-  switch (stage)
+  try
   {
-    case 1:
-      tmp = scraper->ParseIndex(page_text);
-      break;
-    case 2:
-      tmp = scraper->ParseStation(station_info, page_text);
-      break;
-    case 3:
-      tmp = scraper->ParseDownload(station_info, page_text);
-      break;
+    sql::query q = std::move(db.build_query("SELECT station_id FROM stations WHERE station_id=?1")
+                               .arg(data.station_id));
+    assert(q.valid() && q.lastError() == SQLITE_OK);
+    assert(q.execute());
+
+    if(q.fetchRow())
+      return true;
   }
-
-  if(stage == 1)
+  catch(std::string& error)
   {
-    uint32_t skipped = 0;
-
-    for(auto pos = std::begin(tmp); pos != std::end(tmp);)
-    {
-      try
-      {
-        sql::query q = std::move(db.build_query("SELECT station_id FROM stations WHERE station_id=?1")
-                                   .arg(pos->station_id));
-        assert(q.valid() && q.lastError() == SQLITE_OK);
-        assert(q.execute());
-
-        if(q.fetchRow())
-        {
-          auto target = pos;
-          pos = std::next(pos);
-          tmp.erase(target);
-          skipped++;
-        }
-        else
-          pos = std::next(pos);
-      }
-      catch(std::string& error)
-      {
-        std::cerr << "sql error: " << error << std::endl;
-      }
-    }
-    std::clog << "entries added: " << tmp.size() << "  - entries skipped: " << skipped << std::endl;
+    std::cerr << "sql error: " << error << std::endl;
   }
+  return false;
+}
 
-  if(scraper->StageCount() == stage)
+void add_to_db(sql::db& db, station_info_t& data)
+{
+  std::clog << "chargehub" << " - latitude: " << data.latitude<< " - longitude: " << data.longitude  << std::endl;
+  try
   {
-    std::list<station_info_t> rdata;
-
-    for(const auto& station_info : tmp)
+    std::optional<std::vector<uint8_t>> port_ids;
+    if(!data.ports.empty())
     {
-      std::clog << "chargehub" << " - latitude: " << station_info.latitude<< " - longitude: " << station_info.longitude  << std::endl;
-      try
+      port_ids.emplace(0);
+      while(!data.ports.empty())
       {
-        std::optional<std::vector<uint8_t>> port_ids;
-        if(!station_info.ports.empty())
+        auto port = data.ports.top();
+        data.ports.pop();
+        std::optional<uint64_t> power_id;
+        if(port.port_id)
         {
-          port_ids.emplace(0);
-          for(const port_t& port : station_info.ports)
-          {
-            sql::query q = std::move(db.build_query("INSERT OR IGNORE INTO ports ("
-                                                    "port_id,"
-                                                    "station_id,"
-                                                    "level,"
-                                                    "connector,"
-                                                    "amp,"
-                                                    "kw,"
-                                                    "volt,"
-                                                    "price_free,"
-                                                    "price_string,"
-                                                    "initialization,"
-                                                    "network_id,"
-                                                    "display_name,"
-                                                    "network_port_id,"
-                                                    "weird)"
-                                                    " VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)")
-                                     .arg(port.port_id)
-                                     .arg(station_info.station_id)
-                                     .arg(port.level)
-                                     .arg(port.connector)
-                                     .arg(port.amp, sql::reference)
-                                     .arg(port.kw, sql::reference)
-                                     .arg(port.volt, sql::reference)
-                                     .arg(port.price_free)
-                                     .arg(port.price_string, sql::reference)
-                                     .arg(port.initialization, sql::reference)
-                                     .arg(port.network_id)
-                                     .arg(port.display_name, sql::reference)
-                                     .arg(port.network_port_id, sql::reference)
-                                     .arg(port.weird));
-              assert(q.execute());
+          sql::query q = std::move(db.build_query("INSERT OR ABORT INTO power (level, connector, amp, kW, volt) VALUES (?1,?2,?3,?4,?5)")
+                                   .arg(port.level)
+                                   .arg(port.connector)
+                                   .arg(port.amp, sql::reference)
+                                   .arg(port.kw, sql::reference)
+                                   .arg(port.volt, sql::reference));
+          assert(q.execute() || q.lastError() == SQLITE_CONSTRAINT_UNIQUE);
 
-            auto data = serialize(*port.port_id);
-            port_ids->insert(
-                  port_ids->end(),
-                  std::make_move_iterator(std::begin(data)),
-                  std::make_move_iterator(std::end(data))
-                );
-          }
-        }
-
-        std::optional<uint64_t> URL_id;
-        if(station_info.URL)
-        {
-          sql::query q = std::move(db.build_query("INSERT OR IGNORE INTO URLs (URL) VALUES (?1)")
-                                   .arg(station_info.URL));
-          assert(q.execute());
-
-          q = std::move(db.build_query("SELECT URL_id FROM URLs WHERE URL=?1")
-                        .arg(station_info.URL));
+          q = std::move(db.build_query("SELECT power_id FROM power WHERE level=?1 AND connector=?2 AND amp=?3 AND kW=?4 AND volt=?5")
+                        .arg(port.level)
+                        .arg(port.connector)
+                        .arg(port.amp, sql::reference)
+                        .arg(port.kw, sql::reference)
+                        .arg(port.volt, sql::reference));
           assert(q.execute());
           if(q.fetchRow())
-            q.getField(URL_id);
+            q.getField(power_id);
         }
 
-        sql::query q = std::move(db.build_query("INSERT OR IGNORE INTO stations ("
+        sql::query q = std::move(db.build_query("INSERT OR IGNORE INTO ports ("
                                                 "station_id,"
-                                                "latitude,"
-                                                "longitude,"
-                                                "name,"
-                                                "description,"
-                                                "street_number,"
-                                                "street_name,"
-                                                "city,"
-                                                "state,"
-                                                "country,"
-                                                "zipcode,"
-                                                "phone_number,"
-                                                "URL_id,"
-                                                "access_public,"
-                                                "access_restrictions,"
+                                                "port_id,"
                                                 "network_id,"
+                                                "network_station_id,"
+                                                "network_port_id,"
+                                                "power_id,"
                                                 "price_free,"
                                                 "price_string,"
                                                 "initialization,"
-                                                "port_ids)"
-                                                " VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20)")
-                                  .arg(station_info.station_id)
-                                  .arg(station_info.latitude)
-                                  .arg(station_info.longitude)
-                                  .arg(station_info.name, sql::reference)
-                                  .arg(station_info.description, sql::reference)
-                                  .arg(station_info.street_number)
-                                  .arg(station_info.street_name, sql::reference)
-                                  .arg(station_info.city, sql::reference)
-                                  .arg(station_info.state, sql::reference)
-                                  .arg(station_info.country, sql::reference)
-                                  .arg(station_info.zipcode, sql::reference)
-                                  .arg(station_info.phone_number, sql::reference)
-                                  .arg(URL_id)
-                                  .arg(station_info.access_public)
-                                  .arg(station_info.access_restrictions, sql::reference)
-                                  .arg(station_info.network_id)
-                                  .arg(station_info.price_free)
-                                  .arg(station_info.price_string, sql::reference)
-                                  .arg(station_info.initialization, sql::reference)
-                                  .arg(port_ids));
-        assert(q.execute());
+                                                "display_name,"
+                                                "weird)"
+                                                " VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)")
+                                 .arg(data.station_id)
+                                 .arg(port.port_id)
+                                 .arg(data.network_id)
+                                 .arg(data.network_station_id)
+                                 .arg(port.network_port_id)
+                                 .arg(power_id)
+                                 .arg(port.price_free)
+                                 .arg(port.price_string, sql::reference)
+                                 .arg(port.initialization, sql::reference)
+                                 .arg(port.display_name, sql::reference)
+                                 .arg(port.weird));
+          assert(q.execute());
 
-        ++insertions;
-      }
-      catch(std::string& error)
-      {
-        std::cerr << "sql error: " << error << std::endl;
+        auto data = serialize(*port.port_id);
+        port_ids->insert(
+              port_ids->end(),
+              std::make_move_iterator(std::begin(data)),
+              std::make_move_iterator(std::end(data))
+            );
+        std::clog << "added port:" << int(*port.port_id) << std::endl;
       }
     }
-  }
 
-  storage.merge(tmp);
+    std::optional<uint64_t> URL_id;
+    if(data.URL)
+    {
+      sql::query q = std::move(db.build_query("INSERT OR IGNORE INTO URLs (URL) VALUES (?1)")
+                               .arg(data.URL));
+      assert(q.execute());
+
+      q = std::move(db.build_query("SELECT URL_id FROM URLs WHERE URL=?1")
+                    .arg(data.URL));
+      assert(q.execute());
+      if(q.fetchRow())
+        q.getField(URL_id);
+    }
+
+    if(!data.station_id)
+    {
+      sql::query q = std::move(db.build_query("SELECT station_id FROM stations WHERE network_id=?1 AND network_station_id=?2")
+                    .arg(data.network_id).arg(data.network_station_id));
+      assert(q.execute());
+      if(q.fetchRow())
+        q.getField(data.station_id);
+    }
+
+    sql::query q = std::move(db.build_query("INSERT OR ABORT INTO stations ("
+                                            "station_id,"
+                                            "network_id,"
+                                            "network_station_id,"
+                                            "latitude,"
+                                            "longitude,"
+                                            "name,"
+                                            "description,"
+                                            "street_number,"
+                                            "street_name,"
+                                            "city,"
+                                            "state,"
+                                            "country,"
+                                            "zipcode,"
+                                            "phone_number,"
+                                            "URL_id,"
+                                            "access_public,"
+                                            "access_restrictions,"
+                                            "price_free,"
+                                            "price_string,"
+                                            "initialization,"
+                                            "port_ids)"
+                                            " VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21)")
+                             .arg(data.station_id)
+                             .arg(data.network_id)
+                             .arg(data.network_station_id)
+                             .arg(data.latitude)
+                             .arg(data.longitude)
+                             .arg(data.name, sql::reference)
+                             .arg(data.description, sql::reference)
+                             .arg(data.street_number)
+                             .arg(data.street_name, sql::reference)
+                             .arg(data.city, sql::reference)
+                             .arg(data.state, sql::reference)
+                             .arg(data.country, sql::reference)
+                             .arg(data.zipcode, sql::reference)
+                             .arg(data.phone_number, sql::reference)
+                             .arg(URL_id)
+                             .arg(data.access_public)
+                             .arg(data.access_restrictions, sql::reference)
+                             .arg(data.price_free)
+                             .arg(data.price_string, sql::reference)
+                             .arg(data.initialization, sql::reference)
+                             .arg(port_ids));
+    assert(q.execute());
+
+    std::clog << "added station:" << int(*data.station_id) << std::endl;
+  }
+  catch(std::string& error)
+  {
+    std::cerr << "sql error: " << error << std::endl;
+  }
 }
+
+static SimpleCurl& static_request(void)
+{
+  static SimpleCurl request;
+  static bool have_init = false;
+  if(!have_init)
+  {
+    have_init = true;
+    request.reset();
+    request.setOpt(CURLOPT_USERAGENT, "Mozilla/5.0 (X11; Linux x86_64; rv:81.0) Gecko/20100101 Firefox/81.0");
+    request.setOpt(CURLOPT_TCP_KEEPALIVE, 1);
+    request.setOpt(CURLOPT_WRITEFUNCTION, curl_to_string);
+  }
+  return request;
+}
+
+std::string get_page(const std::string& name, const station_info_t& data)
+{
+  std::string output;
+  auto& request = static_request();
+  request.setOpt(CURLOPT_WRITEDATA, &output);
+
+  request.setOpt(CURLOPT_POST, !data.post_data.empty());
+
+  if(!data.post_data.empty())
+    request.setOpt(CURLOPT_POSTFIELDS, data.post_data);
+
+  for(const auto& pair : data.header_fields)
+    request.setHeaderField(pair.first, pair.second);
+
+  std::cout << "requesting: " << data.details_URL << std::endl;
+
+  if((!request.setOpt(CURLOPT_URL, data.details_URL) ||
+      !request.perform()) &&
+     request.getLastError() != CURLE_REMOTE_ACCESS_DENIED)
+  {
+    std::cerr << "scraper: " << name << std::endl
+              << "station id: " << data.station_id << std::endl
+              << "name: " << data.name << std::endl
+              << "error: " << request.getLastError() << std::endl;
+  }
+  return output;
+}
+
 
 int main(int argc, char* argv[])
 {
@@ -376,13 +415,12 @@ int main(int argc, char* argv[])
   std::cerr << std::unitbuf;
   std::clog << std::unitbuf;
 
-  SimpleCurl request;
   std::string output;
-  std::list<station_info_t> indexed_data, station_data, download_data;
+  //std::list<station_info_t> indexed_data, station_data, download_data;
 
   std::list<std::pair<std::string, ScraperBase*>> scrapers =
   {
-    { "chargehub", new ChargehubScraper /*(12.5, 13.0)*/ },
+    { "chargehub", new ChargehubScraper ( /* 40.5, 40.75 */ ) },
   };
 
   scrapers.sort(list_sorter);
@@ -423,109 +461,41 @@ int main(int argc, char* argv[])
       std::cerr << pair.first << ", ";
     std::cerr << std::endl;
 
-  //  request.setOpt(CURLOPT_COOKIEFILE, ""); // enable cookies
-    request.setOpt(CURLOPT_USERAGENT, "Mozilla/5.0 (X11; Linux x86_64; rv:81.0) Gecko/20100101 Firefox/81.0");
-    request.setOpt(CURLOPT_TCP_KEEPALIVE, 1);
-
-
     sql::db db;
     db_init(db, dbfile);
-    uintptr_t station_count = 0;
     uintptr_t total_insertions = 0;
     uintptr_t insertion_count = 0;
 
-    request.setOpt(CURLOPT_WRITEDATA, &output);
-    request.setOpt(CURLOPT_WRITEFUNCTION, curl_to_string);
+
 
     for(const auto& pair : scrapers)
     {
-      indexed_data.clear();
-      station_data.clear();
-      download_data.clear();
-      station_count = 0;
-//      request.setOpt(CURLOPT_COOKIE, ""); // erase all cookies
-
+      std::stack<station_info_t> data;
       ScraperBase* scraper = pair.second;
       std::clog << pair.first << ": scraper active" << std::endl;
-      do
-      {
-        std::clog << pair.first << ": index url: " << scraper->IndexURL() << std::endl;
 
+      //static_request().setOpt(CURLOPT_COOKIE, ""); // erase all cookies and enable cookies
+
+      output.clear();
+      data = scraper->Init();
+
+      while(!data.empty())
+      {
+        auto d = data.top(); data.pop();
         output.clear();
-        if(request.setOpt(CURLOPT_URL, scraper->IndexURL()) &&
-           request.perform())
+        output = get_page(pair.first, d);
+        std::stack<station_info_t> new_data = scraper->Parse(d, output);
+
+        while(!new_data.empty())
         {
-//          cookie_calculator(request, scraper->IndexURL(), output);
-          exec_stage(db, scraper, 1, station_info_t(), output, indexed_data, insertion_count);
-        }
-        else
-        {
-          std::cerr << "scraper: " << pair.first << std::endl
-                    << "index request: " << scraper->IndexURL() << std::endl
-                    << "error: " << request.getLastError() << std::endl;
-          continue;
-        }
-      } while(!scraper->IndexingComplete());
-
-      if(scraper->StageCount() >= 2) // model url isn't final url
-      {
-
-        for(const auto& station_info : indexed_data)
-        {
-          ++station_count;
-//          std::clog << pair.first << ": station URL: " << *station_info.details_URL << std::endl;
-
-          output.clear();
-          if(station_info.post_data && !station_info.post_data->empty())
-          {
-
-            std::clog << pair.first << ": post data: " << *station_info.post_data << std::endl;
-            request.setOpt(CURLOPT_POST, 1);
-            request.setOpt(CURLOPT_POSTFIELDS, *station_info.post_data);
-          }
-          else
-            request.setOpt(CURLOPT_POST, 0);
-
-          if(request.setOpt(CURLOPT_URL, *station_info.details_URL) &&
-             request.perform())
-            exec_stage(db, scraper, 2, station_info, output, station_data, insertion_count);
-          else if(request.getLastError() != CURLE_REMOTE_ACCESS_DENIED)
-          {
-            std::cerr << "scraper: " << pair.first << std::endl
-                      << "station id: " << station_info.station_id << std::endl
-                      << "name: " << station_info.name << std::endl
-                      << "error: " << request.getLastError() << std::endl;
-          }
+          auto nd = new_data.top(); new_data.pop();
+          if(nd.steps_remaining == 0)
+            add_to_db(db, nd);
+          else if(nd.steps_remaining != 1 ||
+                  !exists_in_db(db, nd))
+            data.push(nd);
         }
       }
-
-      if(scraper->StageCount() >= 3) // model url isn't final url
-      {
-        for(auto& station_info : station_data)
-        {
-
-          output.clear();
-          if(!station_info.post_data->empty())
-          {
-//            std::clog << pair.first << ": post data: " << station_info.post_data << std::endl;
-            request.setOpt(CURLOPT_POST, 1);
-//            request.setOpt(CURLOPT_POSTFIELDS, station_info.post_data);
-          }
-          else
-            request.setOpt(CURLOPT_POST, 0);
-
-          if(request.setOpt(CURLOPT_URL, station_info.details_URL) &&
-             request.perform())
-            exec_stage(db, scraper, 3, station_info, output, download_data, insertion_count);
-        }
-      }
-
-      std::clog << pair.first << " stage 1 entries: " << indexed_data.size() << std::endl;
-      if(scraper->StageCount() >= 2)
-        std::clog << pair.first << " stage 2 entries: " << station_data.size() << std::endl;
-      if(scraper->StageCount() >= 3)
-        std::clog << pair.first << " stage 3 entries: " << download_data.size() << std::endl;
-
       std::clog << pair.first << " insertions made: " << insertion_count << std::endl;
 
       total_insertions += insertion_count;

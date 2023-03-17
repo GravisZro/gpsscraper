@@ -10,32 +10,49 @@
 
 #include <shortjson/shortjson.h>
 
+#include <cassert>
 
 ChargehubScraper::ChargehubScraper(double starting_latitude,
                                    double stopping_latitude) noexcept
-  : m_latitude(starting_latitude),
+  : m_start_latitude(starting_latitude),
     m_end_latitude(stopping_latitude)
 {
 }
 
-std::string ChargehubScraper::IndexURL(void) const noexcept
+std::stack<station_info_t> ChargehubScraper::Parse(const station_info_t& station_info, const ext::string& input)
 {
-  return "https://apiv2.chargehub.com/api/locationsmap?"
-         "latmin=" + std::to_string(m_latitude) +
-         "&latmax=" + std::to_string(m_latitude + m_latitude_step) +
-         "&lonmin=-90.0&lonmax=90.0"
-         "&limit=2000&key=olitest&remove_networks=&remove_levels=&remove_connectors=&remove_other=0&above_power=";
+  switch(station_info.steps_remaining)
+  {
+    default: assert(false);
+    case 2: return ParseIndex(input);
+    case 1: return ParseStation(station_info, input);
+  }
+  return std::stack<station_info_t>();
 }
 
-bool ChargehubScraper::IndexingComplete(void) const noexcept
+std::stack<station_info_t> ChargehubScraper::Init(void)
 {
-  m_latitude += m_latitude_step;
-  return m_latitude >= m_end_latitude;
+  std::stack<station_info_t> return_data;
+  for(double latitude = m_start_latitude;
+      latitude < m_end_latitude;
+      latitude += m_latitude_step)
+  {
+    station_info_t tmp;
+    tmp.steps_remaining = 2;
+    tmp.details_URL = "https://apiv2.chargehub.com/api/locationsmap?"
+                      "latmin=" + std::to_string(latitude) +
+                      "&latmax=" + std::to_string(latitude + m_latitude_step) +
+                      "&lonmin=-90.0&lonmax=90.0"
+                      "&limit=10&key=olitest&remove_networks=&remove_levels=&remove_connectors=&remove_other=0&above_power=";
+    return_data.push(tmp);
+    std::cout << "init url: " << return_data.top().details_URL << std::endl;
+  }
+  return return_data;
 }
 
-std::list<station_info_t> ChargehubScraper::ParseIndex(const ext::string &input)
+std::stack<station_info_t> ChargehubScraper::ParseIndex(const ext::string &input)
 {
-  std::list<station_info_t> return_data;
+  std::stack<station_info_t> return_data;
   try
   {
     shortjson::node_t root = shortjson::Parse(input);
@@ -58,11 +75,12 @@ std::list<station_info_t> ChargehubScraper::ParseIndex(const ext::string &input)
       if(subnode.type != shortjson::Field::Integer)
         throw 5;
 
-
-      return_data.push_back({
-                              .station_id = int32_t(subnode.toNumber()),
-                              .details_URL = "https://apiv2.chargehub.com/api/stations/details?language=en&station_id=" + std::to_string(subnode.toNumber())
-                            });
+      std::cout << "station id: " << int(subnode.toNumber()) << std::endl;
+      station_info_t tmp;
+      tmp.station_id = subnode.toNumber();
+      tmp.steps_remaining = 1;
+      tmp.details_URL = "https://apiv2.chargehub.com/api/stations/details?language=en&station_id=" + std::to_string(subnode.toNumber());
+      return_data.push(tmp);
     }
   }
   catch(int exit_id)
@@ -179,10 +197,10 @@ std::optional<bool> get_price_free(std::optional<std::string>& str)
   return false;
 }
 
-std::list<station_info_t> ChargehubScraper::ParseStation(const station_info_t& station_info, const ext::string& input)
+std::stack<station_info_t> ChargehubScraper::ParseStation(const station_info_t& station_info, const ext::string& input)
 {
   (void)station_info;
-  std::list<station_info_t> return_data;
+  std::stack<station_info_t> return_data;
 
   try
   {
@@ -198,6 +216,7 @@ std::list<station_info_t> ChargehubScraper::ParseStation(const station_info_t& s
         throw 3;
 
       station_info_t station = station_info;
+      station.steps_remaining = 0;
 
       for(shortjson::node_t& subnode : child_node.toArray())
       {
@@ -263,7 +282,10 @@ std::list<station_info_t> ChargehubScraper::ParseStation(const station_info_t& s
               if(plug_element.identifier == "Level")
                 port.level = safe_int32(plug_element);
               else if(plug_element.identifier == "Network")
-                port.network_id = safe_int32(plug_element);
+              {
+                if(station.network_id != safe_int32(plug_element))
+                   throw 7;
+              }
               else if(plug_element.identifier == "Name")
                 connector_from_string(safe_string(plug_element), port);
               else if(plug_element.identifier == "PriceString")
@@ -284,7 +306,7 @@ std::list<station_info_t> ChargehubScraper::ParseStation(const station_info_t& s
 
             shortjson::node_t portsnode;
             if(!shortjson::FindNode(plugnode, portsnode, "Ports"))
-              throw 9;
+              throw 8;
 
             for(auto& portnode : portsnode.toArray())
             {
@@ -294,17 +316,26 @@ std::list<station_info_t> ChargehubScraper::ParseStation(const station_info_t& s
                 if(port_element.identifier == "portId")
                   thisport.port_id = safe_int32(port_element);
                 else if(port_element.identifier == "netPortId")
-                  thisport.network_port_id = safe_string(port_element);
+                {
+                  if(port_element.type == shortjson::Field::String)
+                  {
+                     auto str = validate_string(port_element.toString());
+                     if(str)
+                       thisport.network_port_id = std::stoi(*str);
+                  }
+                  else if(port_element.type != shortjson::Field::Null)
+                    throw 9;
+                }
                 else if(port_element.identifier == "displayName")
                   thisport.display_name = safe_string(port_element);
               }
-              station.ports.push_back(thisport);
+              station.ports.push(thisport);
             }
           }
         }
       }
 
-      return_data.push_back(station);
+      return_data.push(station);
     }
   }
   catch(int exit_id)

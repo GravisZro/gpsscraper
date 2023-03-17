@@ -46,13 +46,3 @@ std::string unescape(const std::string& source) noexcept
     dest.erase(pos, 1);
   return dest;
 }
-
-std::list<station_info_t> ScraperBase::ParseStation(const station_info_t& , const ext::string& )
-{
-  return std::list<station_info_t>();
-}
-
-std::list<station_info_t> ScraperBase::ParseDownload(const station_info_t& , const ext::string& ) const
-{
-  return std::list<station_info_t>();
-}

@@ -4,7 +4,7 @@
 #include "utilities.h"
 #include <unordered_set>
 #include <optional>
-#include <vector>
+#include <stack>
 
 std::string url_encode(const std::string& source, std::unordered_set<char> exceptions = std::unordered_set<char>()) noexcept;
 std::string unescape(const std::string& source) noexcept;
@@ -12,6 +12,7 @@ std::string unescape(const std::string& source) noexcept;
 struct port_t
 {
   std::optional<int32_t> port_id;
+  std::optional<int32_t> network_port_id;
 
   std::optional<int32_t> level;
   std::optional<int32_t> connector;
@@ -23,15 +24,26 @@ struct port_t
   std::optional<std::string> price_string;
   std::optional<std::string> initialization;
 
-  std::optional<int32_t> network_id;
   std::optional<std::string> display_name;
-  std::optional<std::string> network_port_id;
   bool weird;
 };
 
-struct station_info_t
+
+struct progress_info_t
 {
-  int32_t station_id;
+  uint8_t steps_remaining;
+  std::string details_URL;
+  std::string post_data;
+  std::list<std::pair<std::string, std::string>> header_fields;
+};
+
+struct station_info_t : progress_info_t
+{
+  station_info_t(void) = default;
+  station_info_t(progress_info_t&& other) : progress_info_t (other) {}
+
+  std::optional<int32_t> station_id;
+  std::optional<int32_t> network_station_id;
   double latitude;
   double longitude;
 
@@ -56,11 +68,9 @@ struct station_info_t
   std::optional<std::string> initialization;
   std::optional<int32_t> network_id;
 
-  std::vector<port_t> ports;
+  std::stack<port_t> ports;
 
   // discarded info
-  std::optional<std::string> details_URL;
-  std::optional<std::string> post_data;
 
   constexpr bool operator  < (const station_info_t& other) const noexcept { return latitude  < other.latitude &&
                                                                                    longitude < other.longitude; }
@@ -72,14 +82,8 @@ class ScraperBase
 public:
   virtual ~ScraperBase(void) = default;
 
-  virtual uint8_t StageCount(void) const noexcept = 0;
-
-  virtual std::string IndexURL(void) const noexcept = 0;
-  virtual bool IndexingComplete(void) const noexcept { return true; }
-
-  virtual std::list<station_info_t> ParseIndex(const ext::string& input) = 0;
-  virtual std::list<station_info_t> ParseStation(const station_info_t& station_info, const ext::string& input);
-  virtual std::list<station_info_t> ParseDownload(const station_info_t& station_info, const ext::string& input) const;
+  virtual std::stack<station_info_t> Init(void) { return Parse(progress_info_t { .steps_remaining = 0xFF }, ""); }
+  virtual std::stack<station_info_t> Parse(const station_info_t& station_info, const ext::string& input) = 0;
 };
 
 #endif // SCRAPER_BASE_H
