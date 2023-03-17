@@ -29,9 +29,17 @@ struct port_t
 };
 
 
+enum class Parser : uint8_t
+{
+  Complete = 0x00,
+  Station,
+  Index,
+  Initial = 0xFF
+};
+
 struct progress_info_t
 {
-  uint8_t steps_remaining;
+  Parser parser;
   std::string details_URL;
   std::string post_data;
   std::list<std::pair<std::string, std::string>> header_fields;
@@ -77,12 +85,13 @@ struct station_info_t : progress_info_t
   constexpr bool operator == (const station_info_t& other) const noexcept { return station_id == other.station_id; }
 };
 
+
 class ScraperBase
 {
 public:
   virtual ~ScraperBase(void) = default;
 
-  virtual std::stack<station_info_t> Init(void) { return Parse(progress_info_t { .steps_remaining = 0xFF }, ""); }
+  virtual std::stack<station_info_t> Init(void) { return Parse(progress_info_t { .parser = Parser::Initial }, ""); }
   virtual std::stack<station_info_t> Parse(const station_info_t& station_info, const ext::string& input) = 0;
 };
 

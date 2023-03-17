@@ -21,11 +21,11 @@ ChargehubScraper::ChargehubScraper(double starting_latitude,
 
 std::stack<station_info_t> ChargehubScraper::Parse(const station_info_t& station_info, const ext::string& input)
 {
-  switch(station_info.steps_remaining)
+  switch(station_info.parser)
   {
     default: assert(false);
-    case 2: return ParseIndex(input);
-    case 1: return ParseStation(station_info, input);
+    case Parser::Index: return ParseIndex(input);
+    case Parser::Station: return ParseStation(station_info, input);
   }
   return std::stack<station_info_t>();
 }
@@ -38,7 +38,7 @@ std::stack<station_info_t> ChargehubScraper::Init(void)
       latitude += m_latitude_step)
   {
     station_info_t tmp;
-    tmp.steps_remaining = 2;
+    tmp.parser = Parser::Index;
     tmp.details_URL = "https://apiv2.chargehub.com/api/locationsmap?"
                       "latmin=" + std::to_string(latitude) +
                       "&latmax=" + std::to_string(latitude + m_latitude_step) +
@@ -78,7 +78,7 @@ std::stack<station_info_t> ChargehubScraper::ParseIndex(const ext::string &input
       std::cout << "station id: " << int(subnode.toNumber()) << std::endl;
       station_info_t tmp;
       tmp.station_id = subnode.toNumber();
-      tmp.steps_remaining = 1;
+      tmp.parser = Parser::Station;
       tmp.details_URL = "https://apiv2.chargehub.com/api/stations/details?language=en&station_id=" + std::to_string(subnode.toNumber());
       return_data.push(tmp);
     }
@@ -216,7 +216,7 @@ std::stack<station_info_t> ChargehubScraper::ParseStation(const station_info_t& 
         throw 3;
 
       station_info_t station = station_info;
-      station.steps_remaining = 0;
+      station.parser = Parser::Complete;
 
       for(shortjson::node_t& subnode : child_node.toArray())
       {
