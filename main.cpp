@@ -16,6 +16,7 @@
 //#include <scrapers/utilities.h>
 
 #include <scrapers/scraper_base.h>
+//#include <scrapers/evgo_scraper.h>
 #include <scrapers/chargehub_scraper.h>
 
 #include <unistd.h>
@@ -93,7 +94,7 @@ void db_init(sql::db& db, std::string_view filename)
       "port_id" INTEGER DEFAULT NULL,
       "network_id" INTEGER DEFAULT NULL,
       "network_station_id" INTEGER DEFAULT NULL,
-      "network_port_id" INTEGER DEFAULT NULL,
+      "network_port_id" TEXT DEFAULT NULL,
 
       "power_id" INTEGER NOT NULL,
 
@@ -198,8 +199,12 @@ bool exists_in_db(sql::db& db, const station_info_t& data)
 {
   try
   {
-    sql::query q = std::move(db.build_query("SELECT station_id FROM stations WHERE station_id=?1")
+    sql::query q;
+    if(data.station_id)
+    {
+      q = std::move(db.build_query("SELECT station_id FROM stations WHERE station_id=?1")
                                .arg(data.station_id));
+    }
     assert(q.valid() && q.lastError() == SQLITE_OK);
     assert(q.execute());
 
@@ -227,9 +232,10 @@ void add_to_db(sql::db& db, station_info_t& data)
         auto port = data.ports.top();
         data.ports.pop();
         std::optional<uint64_t> power_id;
+        sql::query q;
         if(port.port_id)
         {
-          sql::query q = std::move(db.build_query("INSERT OR ABORT INTO power (level, connector, amp, kW, volt) VALUES (?1,?2,?3,?4,?5)")
+          q = std::move(db.build_query("INSERT OR ABORT INTO power (level, connector, amp, kW, volt) VALUES (?1,?2,?3,?4,?5)")
                                    .arg(port.level)
                                    .arg(port.connector)
                                    .arg(port.amp, sql::reference)
@@ -248,31 +254,31 @@ void add_to_db(sql::db& db, station_info_t& data)
             q.getField(power_id);
         }
 
-        sql::query q = std::move(db.build_query("INSERT OR IGNORE INTO ports ("
-                                                "station_id,"
-                                                "port_id,"
-                                                "network_id,"
-                                                "network_station_id,"
-                                                "network_port_id,"
-                                                "power_id,"
-                                                "price_free,"
-                                                "price_string,"
-                                                "initialization,"
-                                                "display_name,"
-                                                "weird)"
-                                                " VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)")
-                                 .arg(data.station_id)
-                                 .arg(port.port_id)
-                                 .arg(data.network_id)
-                                 .arg(data.network_station_id)
-                                 .arg(port.network_port_id)
-                                 .arg(power_id)
-                                 .arg(port.price_free)
-                                 .arg(port.price_string, sql::reference)
-                                 .arg(port.initialization, sql::reference)
-                                 .arg(port.display_name, sql::reference)
-                                 .arg(port.weird));
-          assert(q.execute());
+        q = std::move(db.build_query("INSERT OR IGNORE INTO ports ("
+                                     "station_id,"
+                                     "port_id,"
+                                     "network_id,"
+                                     "network_station_id,"
+                                     "network_port_id,"
+                                     "power_id,"
+                                     "price_free,"
+                                     "price_string,"
+                                     "initialization,"
+                                     "display_name,"
+                                     "weird)"
+                                     " VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)")
+                      .arg(data.station_id)
+                      .arg(port.port_id)
+                      .arg(data.network_id)
+                      .arg(data.network_station_id)
+                      .arg(port.network_port_id, sql::reference)
+                      .arg(power_id)
+                      .arg(port.price_free)
+                      .arg(port.price_string, sql::reference)
+                      .arg(port.initialization, sql::reference)
+                      .arg(port.display_name, sql::reference)
+                      .arg(port.weird));
+        assert(q.execute());
 
         auto data = serialize(*port.port_id);
         port_ids->insert(
@@ -301,7 +307,8 @@ void add_to_db(sql::db& db, station_info_t& data)
     if(!data.station_id)
     {
       sql::query q = std::move(db.build_query("SELECT station_id FROM stations WHERE network_id=?1 AND network_station_id=?2")
-                    .arg(data.network_id).arg(data.network_station_id));
+                               .arg(data.network_id)
+                               .arg(data.network_station_id));
       assert(q.execute());
       if(q.fetchRow())
         q.getField(data.station_id);
@@ -391,6 +398,8 @@ std::string get_page(const std::string& name, const station_info_t& data)
     request.setHeaderField(pair.first, pair.second);
 
   std::cout << "requesting: " << data.details_URL << std::endl;
+  if(!data.post_data.empty())
+    std::cout << "  with post data: " << data.post_data << std::endl;
 
   if((!request.setOpt(CURLOPT_URL, data.details_URL) ||
       !request.perform()) &&
@@ -401,6 +410,8 @@ std::string get_page(const std::string& name, const station_info_t& data)
               << "name: " << data.name << std::endl
               << "error: " << request.getLastError() << std::endl;
   }
+  else
+    std::cout << output << std::endl;
   return output;
 }
 
@@ -420,6 +431,7 @@ int main(int argc, char* argv[])
 
   std::list<std::pair<std::string, ScraperBase*>> scrapers =
   {
+//    { "evgo", new EVGoScraper() },
     { "chargehub", new ChargehubScraper ( /* 40.5, 40.75 */ ) },
   };
 
@@ -489,9 +501,9 @@ int main(int argc, char* argv[])
         while(!new_data.empty())
         {
           auto nd = new_data.top(); new_data.pop();
-          if(nd.steps_remaining == 0)
+          if(nd.parser == Parser::Complete)
             add_to_db(db, nd);
-          else if(nd.steps_remaining != 1 ||
+          else if(nd.parser != Parser::Station ||
                   !exists_in_db(db, nd))
             data.push(nd);
         }

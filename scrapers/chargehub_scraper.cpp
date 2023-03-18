@@ -108,12 +108,13 @@ inline std::optional<std::string> safe_string(shortjson::node_t& node)
   throw 20;
 }
 
-inline std::optional<int32_t> safe_int32(shortjson::node_t& node)
+template<typename int_type = int32_t>
+inline std::optional<int_type> safe_int(shortjson::node_t& node)
 {
   if(node.type == shortjson::Field::Integer)
-    return node.toNumber();
+    return int_type(node.toNumber());
   if(node.type == shortjson::Field::Null)
-    return std::optional<int32_t>();
+    return std::optional<int_type>();
   throw 21;
 }
 
@@ -223,7 +224,7 @@ std::stack<station_info_t> ChargehubScraper::ParseStation(const station_info_t& 
 
         if(subnode.identifier == "Id")
         {
-          if(station.station_id != safe_int32(subnode))
+          if(station.station_id != safe_int(subnode))
             throw 4;
         }
         else if(subnode.identifier == "LocName")
@@ -231,7 +232,7 @@ std::stack<station_info_t> ChargehubScraper::ParseStation(const station_info_t& 
         else if(subnode.identifier == "LocDesc")
           station.description = safe_string(subnode);
         else if(subnode.identifier == "StreetNo")
-          station.street_number = safe_int32(subnode);
+          station.street_number = safe_int(subnode);
         else if(subnode.identifier == "Street")
           station.street_name = safe_string(subnode);
         else if(subnode.identifier == "City")
@@ -255,7 +256,7 @@ std::stack<station_info_t> ChargehubScraper::ParseStation(const station_info_t& 
         else if(subnode.identifier == "AccessType")
           station.access_public = get_access_public(safe_string(subnode));
         else if(subnode.identifier == "NetworkId")
-          station.network_id = safe_int32(subnode);
+          station.network_id = safe_int<network>(subnode);
         else if(subnode.identifier == "PriceString")
         {
           station.price_string = safe_string(subnode);
@@ -280,10 +281,10 @@ std::stack<station_info_t> ChargehubScraper::ParseStation(const station_info_t& 
             for(auto& plug_element : plugnode.toArray())
             {
               if(plug_element.identifier == "Level")
-                port.level = safe_int32(plug_element);
+                port.level = safe_int(plug_element);
               else if(plug_element.identifier == "Network")
               {
-                if(station.network_id != safe_int32(plug_element))
+                if(station.network_id != safe_int<network>(plug_element))
                    throw 7;
               }
               else if(plug_element.identifier == "Name")
@@ -314,18 +315,9 @@ std::stack<station_info_t> ChargehubScraper::ParseStation(const station_info_t& 
               for(shortjson::node_t& port_element : portnode.toArray())
               {
                 if(port_element.identifier == "portId")
-                  thisport.port_id = safe_int32(port_element);
+                  thisport.port_id = safe_int(port_element);
                 else if(port_element.identifier == "netPortId")
-                {
-                  if(port_element.type == shortjson::Field::String)
-                  {
-                     auto str = validate_string(port_element.toString());
-                     if(str)
-                       thisport.network_port_id = std::stoi(*str);
-                  }
-                  else if(port_element.type != shortjson::Field::Null)
-                    throw 9;
-                }
+                  thisport.network_port_id = safe_string(port_element);
                 else if(port_element.identifier == "displayName")
                   thisport.display_name = safe_string(port_element);
               }
