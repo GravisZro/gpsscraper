@@ -16,7 +16,7 @@
 //#include <scrapers/utilities.h>
 
 #include <scrapers/scraper_base.h>
-//#include <scrapers/evgo_scraper.h>
+#include <scrapers/evgo_scraper.h>
 #include <scrapers/chargehub_scraper.h>
 
 #include <unistd.h>
@@ -224,6 +224,7 @@ void add_to_db(sql::db& db, station_info_t& data)
   try
   {
     std::optional<std::vector<uint8_t>> port_ids;
+    sql::query q;
     if(!data.ports.empty())
     {
       port_ids.emplace(0);
@@ -232,7 +233,6 @@ void add_to_db(sql::db& db, station_info_t& data)
         auto port = data.ports.top();
         data.ports.pop();
         std::optional<uint64_t> power_id;
-        sql::query q;
         if(port.port_id)
         {
           q = std::move(db.build_query("INSERT OR ABORT INTO power (level, connector, amp, kW, volt) VALUES (?1,?2,?3,?4,?5)")
@@ -293,8 +293,8 @@ void add_to_db(sql::db& db, station_info_t& data)
     std::optional<uint64_t> URL_id;
     if(data.URL)
     {
-      sql::query q = std::move(db.build_query("INSERT OR IGNORE INTO URLs (URL) VALUES (?1)")
-                               .arg(data.URL));
+      q = std::move(db.build_query("INSERT OR IGNORE INTO URLs (URL) VALUES (?1)")
+                    .arg(data.URL));
       assert(q.execute());
 
       q = std::move(db.build_query("SELECT URL_id FROM URLs WHERE URL=?1")
@@ -306,58 +306,58 @@ void add_to_db(sql::db& db, station_info_t& data)
 
     if(!data.station_id)
     {
-      sql::query q = std::move(db.build_query("SELECT station_id FROM stations WHERE network_id=?1 AND network_station_id=?2")
-                               .arg(data.network_id)
-                               .arg(data.network_station_id));
+      q = std::move(db.build_query("SELECT station_id FROM stations WHERE network_id=?1 AND network_station_id=?2")
+                    .arg(data.network_id)
+                    .arg(data.network_station_id));
       assert(q.execute());
       if(q.fetchRow())
         q.getField(data.station_id);
     }
 
-    sql::query q = std::move(db.build_query("INSERT OR ABORT INTO stations ("
-                                            "station_id,"
-                                            "network_id,"
-                                            "network_station_id,"
-                                            "latitude,"
-                                            "longitude,"
-                                            "name,"
-                                            "description,"
-                                            "street_number,"
-                                            "street_name,"
-                                            "city,"
-                                            "state,"
-                                            "country,"
-                                            "zipcode,"
-                                            "phone_number,"
-                                            "URL_id,"
-                                            "access_public,"
-                                            "access_restrictions,"
-                                            "price_free,"
-                                            "price_string,"
-                                            "initialization,"
-                                            "port_ids)"
-                                            " VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21)")
-                             .arg(data.station_id)
-                             .arg(data.network_id)
-                             .arg(data.network_station_id)
-                             .arg(data.latitude)
-                             .arg(data.longitude)
-                             .arg(data.name, sql::reference)
-                             .arg(data.description, sql::reference)
-                             .arg(data.street_number)
-                             .arg(data.street_name, sql::reference)
-                             .arg(data.city, sql::reference)
-                             .arg(data.state, sql::reference)
-                             .arg(data.country, sql::reference)
-                             .arg(data.zipcode, sql::reference)
-                             .arg(data.phone_number, sql::reference)
-                             .arg(URL_id)
-                             .arg(data.access_public)
-                             .arg(data.access_restrictions, sql::reference)
-                             .arg(data.price_free)
-                             .arg(data.price_string, sql::reference)
-                             .arg(data.initialization, sql::reference)
-                             .arg(port_ids));
+    q = std::move(db.build_query("INSERT OR ABORT INTO stations ("
+                                 "station_id,"
+                                 "network_id,"
+                                 "network_station_id,"
+                                 "latitude,"
+                                 "longitude,"
+                                 "name,"
+                                 "description,"
+                                 "street_number,"
+                                 "street_name,"
+                                 "city,"
+                                 "state,"
+                                 "country,"
+                                 "zipcode,"
+                                 "phone_number,"
+                                 "URL_id,"
+                                 "access_public,"
+                                 "access_restrictions,"
+                                 "price_free,"
+                                 "price_string,"
+                                 "initialization,"
+                                 "port_ids)"
+                                 " VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21)")
+                  .arg(data.station_id)
+                  .arg(data.network_id)
+                  .arg(data.network_station_id)
+                  .arg(data.latitude)
+                  .arg(data.longitude)
+                  .arg(data.name, sql::reference)
+                  .arg(data.description, sql::reference)
+                  .arg(data.street_number)
+                  .arg(data.street_name, sql::reference)
+                  .arg(data.city, sql::reference)
+                  .arg(data.state, sql::reference)
+                  .arg(data.country, sql::reference)
+                  .arg(data.zipcode, sql::reference)
+                  .arg(data.phone_number, sql::reference)
+                  .arg(URL_id)
+                  .arg(data.access_public)
+                  .arg(data.access_restrictions, sql::reference)
+                  .arg(data.price_free)
+                  .arg(data.price_string, sql::reference)
+                  .arg(data.initialization, sql::reference)
+                  .arg(port_ids));
     assert(q.execute());
 
     std::clog << "added station:" << int(*data.station_id) << std::endl;
@@ -431,8 +431,8 @@ int main(int argc, char* argv[])
 
   std::list<std::pair<std::string, ScraperBase*>> scrapers =
   {
-//    { "evgo", new EVGoScraper() },
-    { "chargehub", new ChargehubScraper ( /* 40.5, 40.75 */ ) },
+    { "evgo", new EVGoScraper() },
+    //{ "chargehub", new ChargehubScraper ( /* 40.5, 40.75 */ ) },
   };
 
   scrapers.sort(list_sorter);

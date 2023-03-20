@@ -29,6 +29,7 @@ PKGCONFIG += sqlite3
 
 SOURCES += \
         main.cpp \
+        scrapers/evgo_scraper.cpp \
         scrapers/utilities.cpp \
         scrapers/scraper_base.cpp \
         scrapers/chargehub_scraper.cpp \
@@ -36,6 +37,7 @@ SOURCES += \
         simplified/simple_sqlite.cpp
 
 HEADERS += \
+  scrapers/evgo_scraper.h \
   scrapers/utilities.h \
   scrapers/scraper_base.h \
   scrapers/chargehub_scraper.h \
