@@ -9,12 +9,13 @@ public:
   ChargehubScraper(double starting_latitude = 12.5,
                    double stopping_latitude = 55.0) noexcept;
 
-  std::stack<station_info_t> Init(void);
-  std::stack<station_info_t> Parse(const station_info_t& station_info, const ext::string& input);
+  pair_data_t BuildQuery(const pair_data_t& input);
+  std::vector<pair_data_t> Parse(const pair_data_t& data, const std::string& input);
 
 private:
-  std::stack<station_info_t> ParseIndex(const ext::string& input);
-  std::stack<station_info_t> ParseStation(const station_info_t& station_info, const ext::string& input);
+  std::vector<pair_data_t> ParserInit(void);
+  std::vector<pair_data_t> ParseMapArea(const std::string& input);
+  std::vector<pair_data_t> ParseStation(const pair_data_t& data, const std::string& input);
 
 private:
   static constexpr double m_latitude_step = 0.25;
