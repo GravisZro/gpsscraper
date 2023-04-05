@@ -1,7 +1,7 @@
 #include "scraper_base.h"
 
-#include <stdlib.h>
-#include <ctype.h>
+#include <cstdlib>
+#include <cctype>
 
 const char hexdigit[] =
 {
