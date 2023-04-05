@@ -1,6 +1,6 @@
 TEMPLATE = app
 CONFIG += console
-CONFIG += c++17
+CONFIG += c++20
 CONFIG += strict_c++
 #CONFIG += exceptions_off
 CONFIG += rtti_off
@@ -9,6 +9,8 @@ CONFIG -= app_bundle
 CONFIG -= qt
 
 #clang:CONFIG += win32
+
+#DEFINES += DATABASE_TOLERANT
 
 #QMAKE_CXXFLAGS_DEBUG += -DDEBUG_BUILD
 QMAKE_CXXFLAGS_DEBUG += -O0
@@ -28,8 +30,10 @@ PKGCONFIG += sqlite3
 
 
 SOURCES += \
+        dbinterface.cpp \
         main.cpp \
         scrapers/evgo_scraper.cpp \
+        scrapers/scraper_types.cpp \
         scrapers/utilities.cpp \
         scrapers/scraper_base.cpp \
         scrapers/chargehub_scraper.cpp \
@@ -37,7 +41,9 @@ SOURCES += \
         simplified/simple_sqlite.cpp
 
 HEADERS += \
+  dbinterface.h \
   scrapers/evgo_scraper.h \
+  scrapers/scraper_types.h \
   scrapers/utilities.h \
   scrapers/scraper_base.h \
   scrapers/chargehub_scraper.h \
