@@ -95,9 +95,9 @@ DBInterface::DBInterface(std::string_view filename)
     CREATE TABLE IF NOT EXISTS ports (
       "network_id"    INTEGER NOT NULL,
       "port_id"       INTEGER NOT NULL,
-      "station_id"    INTEGER DEFAULT NULL,
-      "power_id"      INTEGER NOT NULL,
-      "price_id"      INTEGER NOT NULL,
+      "station_id"    INTEGER NOT NULL,
+      "power_id"      INTEGER DEFAULT NULL,
+      "price_id"      INTEGER DEFAULT NULL,
       "display_name"  TEXT DEFAULT NULL,
       "last_update"   TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
       PRIMARY KEY (network_id,port_id)
@@ -439,7 +439,7 @@ std::list<pair_data_t> DBInterface::getMapLocationCache(const pair_data_t& data)
   std::set<uint64_t> node_ids;
   std::list<query_info_t> nodes = recurseChildLocations(*data.station.network_id, data.query, node_ids);
   for(const auto& qinfo : nodes)
-    return_data.emplace_back(qinfo, station_t{});
+    return_data.emplace_back(pair_data_t{ qinfo, {}});
   return return_data;
 }
 
@@ -1066,7 +1066,11 @@ void DBInterface::addStation(station_t& station)
     }
 
     for(auto& port : station.ports) // add ports to database
+    {
+      port.station_id = station.station_id; // sync station and network ids
+      port.network_id = station.network_id;
       addPort(port);
+    }
 
     addSchedule(station.schedule);
     station.schedule.schedule_id = identifySchedule(station.schedule);
