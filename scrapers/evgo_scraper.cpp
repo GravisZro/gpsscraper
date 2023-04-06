@@ -219,7 +219,7 @@ std::vector<pair_data_t> EVGoScraper::ParseMapArea(const pair_data_t& data, cons
 }
 
 
-std::vector<pair_data_t> EVGoScraper::ParseStation(const pair_data_t& data, const std::string& input)
+std::vector<pair_data_t> EVGoScraper::ParseStation([[maybe_unused]] const pair_data_t& data, const std::string& input)
 {
   std::vector<pair_data_t> return_data;
   auto response = response_parse(input);
@@ -475,11 +475,7 @@ std::vector<pair_data_t> EVGoScraper::ParsePort(const pair_data_t& data, const s
   }
 
   for(auto& port : nd.station.ports)
-  {
     port.display_name = port_name;
-    port.station_id = nd.station.station_id;
-    port.network_id = nd.station.network_id;
-  }
 
   nd.query.parser = Parser::Complete;
   return {{ nd }};
