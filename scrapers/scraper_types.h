@@ -224,6 +224,7 @@ struct power_t
 
 struct price_t
 {
+  price_t(void) : payment(Payment::Undefined) { }
   std::optional<uint64_t>     price_id; // ignored in functions
   std::optional<std::string>  text;
   Payment                     payment;
