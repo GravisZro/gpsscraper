@@ -19,6 +19,7 @@
 #include <scrapers/utilities.h>
 #include <scrapers/scraper_base.h>
 #include <scrapers/evgo_scraper.h>
+#include <scrapers/electrifyscraper.h>
 #include <scrapers/chargehub_scraper.h>
 
 #include <unistd.h>
@@ -63,6 +64,7 @@ static SimpleCurl& static_request(void)
     request.setOpt(CURLOPT_USERAGENT, "Mozilla/5.0 (X11; Linux x86_64; rv:81.0) Gecko/20100101 Firefox/81.0");
     request.setOpt(CURLOPT_TCP_KEEPALIVE, 1);
     request.setOpt(CURLOPT_WRITEFUNCTION, curl_to_string);
+    request.setOpt(CURLOPT_FOLLOWLOCATION, 1);
   }
   return request;
 }
@@ -98,7 +100,6 @@ std::string get_page(const std::string& name, const pair_data_t& data)
   return output;
 }
 
-
 int main(int argc, char* argv[])
 {
   curl_global_init(CURL_GLOBAL_DEFAULT);
@@ -112,6 +113,7 @@ int main(int argc, char* argv[])
   std::list<std::pair<std::string, ScraperBase*>> scrapers =
   {
     { "evgo", new EVGoScraper() },
+    { "electrify_america", new ElectrifyScraper() },    
     //{ "chargehub", new ChargehubScraper ( /* 40.5, 40.75 */ ) },
   };
 
@@ -168,7 +170,6 @@ int main(int argc, char* argv[])
         std::clog << pair.first << ": scraper active" << std::endl;
 
         //static_request().setOpt(CURLOPT_COOKIE, ""); // erase all cookies and enable cookies
-
         {
           pair_data_t nd;
           nd.query.parser = Parser::BuildQuery | Parser::Initial;
@@ -187,8 +188,15 @@ int main(int argc, char* argv[])
           {
             pos = scraper->BuildQuery(pos);
           }
-          std::vector<pair_data_t> new_data = scraper->Parse(pos, get_page(pair.first, pos));
-//          std::clog << "result count: " << new_data.size() << std::endl;
+          std::string result;
+          for(int i = 0; result.empty(); ++i)
+          {
+            if(i)
+              std::clog << "retry #" << i << std::endl;
+            result = get_page(pair.first, pos);
+          }
+          std::vector<pair_data_t> new_data = scraper->Parse(pos, result);
+          std::clog << "result count: " << new_data.size() << std::endl;
 
           for(auto& nd : new_data)
           {
