@@ -33,6 +33,7 @@ SOURCES += \
         dbinterface.cpp \
         main.cpp \
         scrapers/chargehub.cpp \
+        scrapers/circuitelectrique.cpp \
         scrapers/electrifyamerica.cpp \
         scrapers/evgo.cpp \
         scrapers/scraper_types.cpp \
@@ -49,6 +50,7 @@ SOURCES += \
 HEADERS += \
   dbinterface.h \
   scrapers/chargehub.h \
+  scrapers/circuitelectrique.h \
   scrapers/electrifyamerica.h \
   scrapers/evgo.h \
   scrapers/scraper_types.h \

@@ -18,9 +18,10 @@
 
 #include <scrapers/utilities.h>
 #include <scrapers/scraper_base.h>
-#include <scrapers/evgo_scraper.h>
-#include <scrapers/electrifyscraper.h>
-#include <scrapers/chargehub_scraper.h>
+#include <scrapers/circuitelectrique.h>
+#include <scrapers/evgo.h>
+#include <scrapers/electrifyamerica.h>
+#include <scrapers/chargehub.h>
 
 #include <unistd.h>
 
@@ -112,10 +113,12 @@ int main(int argc, char* argv[])
 
   std::list<std::pair<std::string, ScraperBase*>> scrapers =
   {
-    { "evgo", new EVGoScraper() },
-    { "electrify_america", new ElectrifyScraper() },    
+    { "circuit_electrique", new CircuitElectriqueScraper() },
+    //{ "evgo", new EVGoScraper() },
+    //{ "electrify_america", new ElectrifyScraper() },
     //{ "chargehub", new ChargehubScraper ( /* 40.5, 40.75 */ ) },
   };
+
 
   scrapers.sort(list_sorter);
 
