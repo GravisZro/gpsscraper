@@ -1,9 +1,9 @@
-#ifndef ELECTRIFYSCRAPER_H
-#define ELECTRIFYSCRAPER_H
+#ifndef ELECTRIFYAMERICA_H
+#define ELECTRIFYAMERICA_H
 
 #include "scraper_base.h"
 
-class ElectrifyScraper : public ScraperBase
+class ElectrifyAmericaScraper : public ScraperBase
 {
 public:
   std::vector<pair_data_t> Parse(const pair_data_t& data, const std::string& input);
@@ -14,4 +14,4 @@ private:
   std::vector<pair_data_t> ParseStation(const pair_data_t& data, const std::string& input);
 };
 
-#endif // ELECTRIFYSCRAPER_H
+#endif // ELECTRIFYAMERICA_H

@@ -1,5 +1,5 @@
-#ifndef CHARGEHUB_SCRAPER_H
-#define CHARGEHUB_SCRAPER_H
+#ifndef CHARGEHUB_H
+#define CHARGEHUB_H
 
 #include <scrapers/scraper_base.h>
 
@@ -25,4 +25,4 @@ private:
 
 
 
-#endif // CHARGEHUB_SCRAPER_H
+#endif // CHARGEHUB_H

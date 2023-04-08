@@ -1,4 +1,4 @@
-#include "electrifyscraper.h"
+#include "electrifyamerica.h"
 
 // STL
 #include <iostream>
@@ -22,7 +22,7 @@ std::string decompress(const std::string& input)
 }
 
 
-pair_data_t ElectrifyScraper::BuildQuery(const pair_data_t& input)
+pair_data_t ElectrifyAmericaScraper::BuildQuery(const pair_data_t& input)
 {
   pair_data_t data = input;
   data.station.network_id = Network::Electrify_America;
@@ -46,7 +46,7 @@ pair_data_t ElectrifyScraper::BuildQuery(const pair_data_t& input)
   return data;
 }
 
-std::vector<pair_data_t> ElectrifyScraper::Parse(const pair_data_t& data, const std::string& input)
+std::vector<pair_data_t> ElectrifyAmericaScraper::Parse(const pair_data_t& data, const std::string& input)
 {
   try
   {
@@ -70,7 +70,7 @@ std::vector<pair_data_t> ElectrifyScraper::Parse(const pair_data_t& data, const 
   return {};
 }
 
-std::vector<pair_data_t> ElectrifyScraper::ParseMapArea([[maybe_unused]] const pair_data_t& data, const std::string& input)
+std::vector<pair_data_t> ElectrifyAmericaScraper::ParseMapArea([[maybe_unused]] const pair_data_t& data, const std::string& input)
 {
   auto input_str = decompress(input);
   std::vector<pair_data_t> return_data;
@@ -99,7 +99,7 @@ std::vector<pair_data_t> ElectrifyScraper::ParseMapArea([[maybe_unused]] const p
   return return_data;
 }
 
-std::vector<pair_data_t> ElectrifyScraper::ParseStation(const pair_data_t& data, const std::string& input)
+std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t& data, const std::string& input)
 {
   shortjson::node_t root = shortjson::Parse(input);
 

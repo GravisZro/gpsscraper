@@ -32,12 +32,12 @@ PKGCONFIG += sqlite3
 SOURCES += \
         dbinterface.cpp \
         main.cpp \
-        scrapers/electrifyscraper.cpp \
-        scrapers/evgo_scraper.cpp \
+        scrapers/chargehub.cpp \
+        scrapers/electrifyamerica.cpp \
+        scrapers/evgo.cpp \
         scrapers/scraper_types.cpp \
         scrapers/utilities.cpp \
         scrapers/scraper_base.cpp \
-        scrapers/chargehub_scraper.cpp \
         shortjson/shortjson_strict.cpp \
         simplified/simple_sqlite.cpp \
         tinf/src/adler32.c \
@@ -48,12 +48,13 @@ SOURCES += \
 
 HEADERS += \
   dbinterface.h \
-  scrapers/electrifyscraper.h \
-  scrapers/evgo_scraper.h \
+  scrapers/chargehub.h \
+  scrapers/electrifyamerica.h \
+  scrapers/evgo.h \
   scrapers/scraper_types.h \
   scrapers/utilities.h \
   scrapers/scraper_base.h \
-  scrapers/chargehub_scraper.h \
+  shortcsv/shortcsv.h \
   shortjson/shortjson.h \
   simplified/simple_curl.h \
   simplified/simple_sqlite.h \

@@ -1,5 +1,5 @@
-#ifndef EVGO_SCRAPER_H
-#define EVGO_SCRAPER_H
+#ifndef EVGO_H
+#define EVGO_H
 
 #include <scrapers/scraper_base.h>
 
@@ -17,4 +17,4 @@ private:
   std::vector<pair_data_t> ParsePort(const pair_data_t& data, const std::string& input);
 };
 
-#endif // EVGO_SCRAPER_H
+#endif // EVGO_H
