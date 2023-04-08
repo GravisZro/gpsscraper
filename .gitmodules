@@ -10,3 +10,6 @@
 [submodule "tinf"]
 	path = tinf
 	url = git@github.com:jibsen/tinf.git
+[submodule "shortcsv"]
+	path = shortcsv
+	url = git@github.com:GravisZro/shortcsv.git
