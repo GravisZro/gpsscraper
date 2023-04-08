@@ -105,7 +105,7 @@ std::vector<pair_data_t> EVGoScraper::Parse(const pair_data_t& data, const std::
     std::cerr << "JSON parser threw: " << msg << std::endl;
     std::cerr << "page dump:" << std::endl << input << std::endl;
   }
-  return std::vector<pair_data_t>();
+  return {};
 }
 
 inline shortjson::node_t response_parse(const std::string& input)
@@ -295,7 +295,7 @@ std::vector<pair_data_t> EVGoScraper::ParsePort(const pair_data_t& data, const s
     else if(nodeL0.identifier == "addressCountryIso3Code")
       nd.station.contact.country = safe_string<__LINE__>(nodeL0);
     else if(nodeL0.identifier == "addressZipCode")
-      nd.station.contact.zipcode = safe_string<__LINE__>(nodeL0);
+      nd.station.contact.postal_code = safe_string<__LINE__>(nodeL0);
     else if(nodeL0.identifier == "latitude")
       nd.station.location.latitude = safe_float64<__LINE__>(nodeL0);
     else if(nodeL0.identifier == "longitude")

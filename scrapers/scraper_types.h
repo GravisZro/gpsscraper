@@ -118,6 +118,7 @@ enum class Unit : uint8_t
 enum class Currency : uint8_t
 {
   USD = 0,
+  CND,
   Euro,
   Pound,
 };
@@ -247,7 +248,7 @@ struct contact_t
   std::optional<std::string> city;
   std::optional<std::string> state;
   std::optional<std::string> country;
-  std::optional<std::string> zipcode;
+  std::optional<std::string> postal_code;
   std::optional<std::string> phone_number; // ignored in operator bool
   std::optional<std::string> URL; // ignored in operator bool
 

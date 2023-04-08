@@ -148,7 +148,7 @@ std::vector<pair_data_t> ElectrifyScraper::ParseStation(const pair_data_t& data,
     else if(nodeL0.identifier == "country")
       nd.station.contact.country = safe_string<__LINE__>(nodeL0);
     else if(nodeL0.identifier == "postalCode")
-      nd.station.contact.zipcode = safe_string<__LINE__>(nodeL0);
+      nd.station.contact.postal_code = safe_string<__LINE__>(nodeL0);
     else if(nodeL0.identifier == "coordinates")
     {
       if(nodeL0.type != shortjson::Field::Object)

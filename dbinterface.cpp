@@ -111,7 +111,7 @@ DBInterface::DBInterface(std::string_view filename)
       "city"          TEXT DEFAULT NULL,
       "state"         TEXT DEFAULT NULL,
       "country"       TEXT DEFAULT NULL,
-      "zipcode"       TEXT DEFAULT NULL,
+      "postal_code"   TEXT DEFAULT NULL,
       "phone_number"  TEXT DEFAULT NULL,
       "URL_id"        INTEGER DEFAULT NULL
     ) )",
@@ -502,7 +502,7 @@ void DBInterface::addContact(const contact_t& contact)
                                                 "city,"
                                                 "state,"
                                                 "country,"
-                                                "zipcode,"
+                                                "postal_code,"
                                                 "phone_number,"
                                                 "URL_id"
                                               ") VALUES (?1,?2,?3,?4,?5,?6,?7,?8)")
@@ -511,7 +511,7 @@ void DBInterface::addContact(const contact_t& contact)
                              .arg(contact.city, sql::reference)
                              .arg(contact.state, sql::reference)
                              .arg(contact.country, sql::reference)
-                             .arg(contact.zipcode, sql::reference)
+                             .arg(contact.postal_code, sql::reference)
                              .arg(contact.phone_number, sql::reference)
                              .arg(URL_id));
 
@@ -535,13 +535,13 @@ std::optional<uint64_t> DBInterface::identifyContact(const contact_t& contact)
                                                 "city IS ?3 AND "
                                                 "state IS ?4 AND "
                                                 "country IS ?5 AND "
-                                                "zipcode IS ?6")
+                                                "postal_code IS ?6")
                              .arg(contact.street_number)
                              .arg(contact.street_name, sql::reference)
                              .arg(contact.city, sql::reference)
                              .arg(contact.state, sql::reference)
                              .arg(contact.country, sql::reference)
-                             .arg(contact.zipcode, sql::reference));
+                             .arg(contact.postal_code, sql::reference));
 
     while(!q.execute() && q.lastError() == SQLITE_BUSY);
     assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_ROW);
@@ -566,7 +566,7 @@ contact_t DBInterface::getContact(const std::optional<uint64_t> contact_id)
                                                   "city,"
                                                   "state,"
                                                   "country,"
-                                                  "zipcode,"
+                                                  "postal_code,"
                                                   "phone_number,"
                                                   "URL_id "
                                                 "FROM "
@@ -586,7 +586,7 @@ contact_t DBInterface::getContact(const std::optional<uint64_t> contact_id)
          .getField(contact.city)
          .getField(contact.state)
          .getField(contact.country)
-         .getField(contact.zipcode)
+         .getField(contact.postal_code)
          .getField(contact.phone_number)
          .getField(URL_id);
 

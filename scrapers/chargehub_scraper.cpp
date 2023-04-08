@@ -259,7 +259,7 @@ std::vector<pair_data_t> ChargehubScraper::ParseStation(const pair_data_t& data,
       else if(nodeL1.identifier == "Country")
         nd.station.contact.country = safe_string<__LINE__>(nodeL1);
       else if(nodeL1.identifier == "Zip")
-        nd.station.contact.zipcode = safe_string<__LINE__>(nodeL1);
+        nd.station.contact.postal_code = safe_string<__LINE__>(nodeL1);
       else if(nodeL1.identifier == "Lat")
         nd.station.location.latitude = safe_float64<__LINE__>(nodeL1);
       else if(nodeL1.identifier == "Long")

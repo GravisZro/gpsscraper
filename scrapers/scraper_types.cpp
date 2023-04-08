@@ -104,7 +104,7 @@ contact_t::operator bool(void) const
       city ||
       state ||
       country ||
-      zipcode;
+      postal_code;
 }
 
 bool contact_t::operator ==(const contact_t& o) const
@@ -115,7 +115,7 @@ bool contact_t::operator ==(const contact_t& o) const
       city == o.city &&
       state == o.state &&
       country == o.country &&
-      zipcode == o.zipcode &&
+      postal_code == o.postal_code &&
       phone_number == o.phone_number &&
       URL == o.URL;
 }
@@ -127,7 +127,7 @@ void contact_t::incorporate(const contact_t& o)
   incorporate_optional(city, o.city);
   incorporate_optional(state, o.state);
   incorporate_optional(country, o.country);
-  incorporate_optional(zipcode, o.zipcode);
+  incorporate_optional(postal_code, o.postal_code);
   incorporate_optional(phone_number, o.phone_number);
   incorporate_optional(URL, o.URL);
 }
