@@ -115,7 +115,7 @@ int main(int argc, char* argv[])
   {
     { "circuit_electrique", new CircuitElectriqueScraper() },
     //{ "evgo", new EVGoScraper() },
-    //{ "electrify_america", new ElectrifyScraper() },
+    //{ "electrify_america", new ElectrifyAmericaScraper() },
     //{ "chargehub", new ChargehubScraper ( /* 40.5, 40.75 */ ) },
   };
 
