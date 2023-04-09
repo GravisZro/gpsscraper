@@ -18,7 +18,7 @@
 
 #include <scrapers/utilities.h>
 #include <scrapers/scraper_base.h>
-#include <scrapers/circuitelectrique.h>
+#include <scrapers/eptix.h>
 #include <scrapers/evgo.h>
 #include <scrapers/electrifyamerica.h>
 #include <scrapers/chargehub.h>
@@ -113,7 +113,7 @@ int main(int argc, char* argv[])
 
   std::list<std::pair<std::string, ScraperBase*>> scrapers =
   {
-    { "circuit_electrique", new CircuitElectriqueScraper() },
+    { "eptix", new EptixScraper() },
     //{ "evgo", new EVGoScraper() },
     //{ "electrify_america", new ElectrifyAmericaScraper() },
     //{ "chargehub", new ChargehubScraper ( /* 40.5, 40.75 */ ) },

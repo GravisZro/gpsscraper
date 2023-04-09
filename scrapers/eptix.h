@@ -1,9 +1,9 @@
-#ifndef CIRCUITELECTRIQUE_H
-#define CIRCUITELECTRIQUE_H
+#ifndef EPTIX_H
+#define EPTIX_H
 
 #include "scraper_base.h"
 
-class CircuitElectriqueScraper : public ScraperBase
+class EptixScraper : public ScraperBase
 {
 public:
   pair_data_t BuildQuery(const pair_data_t& input);
@@ -11,4 +11,4 @@ public:
 };
 
 
-#endif // CIRCUITELECTRIQUE_H
+#endif // EPTIX_H
