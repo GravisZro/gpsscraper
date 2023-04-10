@@ -1,15 +1,22 @@
 #ifndef UTILITIES_H
 #define UTILITIES_H
 
-#include <string>
+// containers
 #include <set>
 #include <list>
 #include <stack>
 #include <vector>
-#include <type_traits>
 #include <optional>
-#include <cassert>
 
+// C++
+#include <string>
+#include <type_traits>
+
+// C
+#include <cassert>
+#include <climits>
+
+// libraries
 #include <shortjson/shortjson.h>
 
 constexpr uint32_t operator "" _length(const char*, const size_t sz) noexcept
@@ -19,6 +26,12 @@ static_assert("test"_length == 4, "misclaculation");
 
 namespace ext
 {
+  template<typename T, std::enable_if_t<std::is_integral_v<T>, bool> = true>
+  T from_string(const std::string& str, size_t* pos = 0, int base = 10);
+
+  template<typename T, std::enable_if_t<std::is_floating_point_v<T>, bool> = true>
+  T from_string(const std::string& str, size_t* pos = 0);
+
   class string : public std::string
   {
   public:
@@ -30,6 +43,7 @@ namespace ext
     string(const std::string&& other) : std::string(other){}
     string(const std::string& other) : std::string(other){}
 
+    template<int base = 10>
     bool is_number(void) const noexcept;
 
     basic_string& pop_front(void)
@@ -65,7 +79,6 @@ namespace ext
     size_t rfind_after_or_throw(const std::string& other, size_t pos, int throw_value) const;
     size_t rfind_after(const std::string& other, size_t pos = 0) const noexcept;
   };
-
 }
 
 // shortJSON helpers

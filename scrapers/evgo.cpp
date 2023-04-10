@@ -279,7 +279,7 @@ std::vector<pair_data_t> EVGoScraper::ParsePort(const pair_data_t& data, const s
       {
         auto pos = std::find_if(std::begin(*val), std::end(*val),
                        [](unsigned char c){ return std::isspace(c); });
-        nd.station.contact.street_number = std::stoi(std::string(std::begin(*val), pos));
+        nd.station.contact.street_number = ext::from_string<int32_t>(std::string(std::begin(*val), pos));
         pos = std::next(pos);
         nd.station.contact.street_name = std::string(pos, std::end(*val));
       }

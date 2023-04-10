@@ -91,7 +91,7 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseMapArea([[maybe_unused]] 
         throw __LINE__;
       pair_data_t nd;
       nd.query.parser = Parser::BuildQuery | Parser::Station;
-      nd.query.node_id = std::stoi(siteId);
+      nd.query.node_id = ext::from_string<uint64_t>(siteId);
       return_data.emplace_back(nd);
     }
   }
@@ -121,7 +121,7 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t
       ext::string val = nodeL0.toString();
       if(!val.is_number())
         throw __LINE__;
-      nd.station.station_id = std::stoi(val);
+      nd.station.station_id = ext::from_string<uint64_t>(val);
     }
     else if(nodeL0.identifier == "name")
       nd.station.name = safe_string<__LINE__>(nodeL0);
@@ -132,7 +132,7 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t
       {
         auto pos = std::find_if(std::begin(*val), std::end(*val),
                        [](unsigned char c){ return std::isspace(c); });
-        nd.station.contact.street_number = std::stoi(std::string(std::begin(*val), pos));
+        nd.station.contact.street_number = ext::from_string<int32_t>(std::string(std::begin(*val), pos));
         pos = std::next(pos);
         nd.station.contact.street_name = std::string(pos, std::end(*val));
       }
@@ -270,7 +270,7 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t
               modifier += 200;
             if(!val.is_number())
               throw __LINE__;
-            port.port_id = std::stoi(val) + modifier +
+            port.port_id = ext::from_string<uint64_t>(val) + modifier +
                            (*nd.station.station_id * 1000);
           }
           else if(nodeL2.identifier == "connectors")

@@ -1,14 +1,51 @@
 #include "utilities.h"
 
+// C++
 #include <algorithm>
+
+// C
 #include <cctype>
 
 namespace ext
 {
-  bool string::is_number(void) const noexcept
+
+  template<> int from_string(const std::string& str, size_t* pos, int base)
+    { return std::stoi(str, pos, base); }
+
+  template<> long from_string(const std::string& str, size_t* pos, int base)
+    { return std::stol(str, pos, base); }
+
+  template<> long long from_string(const std::string& str, size_t* pos, int base)
+    { return std::stoll(str, pos, base); }
+
+  template<> unsigned long from_string(const std::string& str, size_t* pos, int base)
+    { return std::stoul(str, pos, base); }
+
+  template<> unsigned long long from_string(const std::string& str, size_t* pos, int base)
+    { return std::stoull(str, pos, base); }
+
+
+  template<> float from_string(const std::string& str, size_t* pos)
+    { return std::stof(str, pos); }
+
+  template<> double from_string(const std::string& str, size_t* pos)
+    { return std::stod(str, pos); }
+
+  template<> long double from_string(const std::string& str, size_t* pos)
+    { return std::stold(str, pos); }
+
+  template<>
+  bool string::is_number<10>(void) const noexcept
   {
     return !empty() &&
         std::find_if_not(begin(), end(), [](unsigned char c) { return std::isdigit(c); }) == end();
+  }
+
+  template<>
+  bool string::is_number<16>(void) const noexcept
+  {
+    return !empty() &&
+        std::find_if_not(begin(), end(), [](unsigned char c) { return std::isxdigit(c); }) == end();
   }
 
   size_t string::erase(const std::string& other) noexcept
