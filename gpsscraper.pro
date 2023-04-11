@@ -56,7 +56,6 @@ HEADERS += \
   scrapers/scraper_types.h \
   scrapers/utilities.h \
   scrapers/scraper_base.h \
-  shortcsv/shortcsv.h \
   shortjson/shortjson.h \
   simplified/simple_curl.h \
   simplified/simple_sqlite.h \
