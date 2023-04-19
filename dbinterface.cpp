@@ -321,101 +321,46 @@ DBInterface::~DBInterface(void)
   assert(m_db.close());
 }
 
-std::list<query_info_t> DBInterface::getChildLocations(Network network_id, query_info_t qinfo)
+std::optional<pair_data_t> DBInterface::getMapLocation(Network network_id, const std::string& node_id)
 {
-  std::list<query_info_t> children;
-
-  if(qinfo.child_ids)
-    for(auto& child_id : *qinfo.child_ids)
-    {
-      sql::query q = std::move(m_db.build_query("SELECT "
-                                                  "latitude_max,"
-                                                  "latitude_min,"
-                                                  "longitude_max,"
-                                                  "longitude_min,"
-                                                  "node_id,"
-                                                  "child_ids "
-                                                "FROM "
-                                                  "map_query_cache "
-                                                "WHERE "
-                                                  "network_id IS ?1 AND "
-                                                  "node_id IS ?2")
-                               .arg(network_id)
-                               .arg(child_id));
-      while(!q.execute() && q.lastError() == SQLITE_BUSY);
-
-      while(q.fetchRow())
-      {
-        query_info_t nqi;
-
-        q.getField(nqi.bounds.latitude.max)
-            .getField(nqi.bounds.latitude.min)
-            .getField(nqi.bounds.longitude.max)
-            .getField(nqi.bounds.longitude.min)
-            .getField(nqi.node_id)
-            .getField(nqi.child_ids);
-
-        children.emplace_back(std::move(nqi));
-      }
-    }
-  return children;
-}
-
-std::list<pair_data_t> DBInterface::getMapLocation(const pair_data_t& data)
-{
-  std::list<pair_data_t> return_data;
-
-  MUST(data.station.network_id && data.query.node_id)
+  std::optional<pair_data_t> return_data;
+  sql::query q = std::move(m_db.build_query("SELECT "
+                                              "network_id,"
+                                              "latitude_max,"
+                                              "latitude_min,"
+                                              "longitude_max,"
+                                              "longitude_min,"
+                                              "node_id,"
+                                              "child_ids "
+                                            "FROM "
+                                              "map_query_cache "
+                                            "WHERE "
+                                              "network_id IS ?1 AND "
+                                              "node_id IS ?2")
+                           .arg(network_id)
+                           .arg(node_id));
+  while(!q.execute() && q.lastError() == SQLITE_BUSY);
+  while(q.fetchRow())
   {
-    sql::query q = std::move(m_db.build_query("SELECT "
-                                                "child_ids "
-                                              "FROM "
-                                                "map_query_cache "
-                                              "WHERE "
-                                                "network_id IS ?1 AND "
-                                                "node_id IS ?2")
-                             .arg(data.station.network_id)
-                             .arg(data.query.node_id));
-    while(!q.execute() && q.lastError() == SQLITE_BUSY);
-    assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_ROW);
-
-    MUST(q.fetchRow())
+    pair_data_t nd;
+    q.getField(nd.station.network_id)
+        .getField(nd.query.bounds.latitude.max)
+        .getField(nd.query.bounds.latitude.min)
+        .getField(nd.query.bounds.longitude.max)
+        .getField(nd.query.bounds.longitude.min)
+        .getField(nd.query.node_id)
+        .getField(nd.query.child_ids);
+    if(!return_data)
+      return_data.emplace(std::move(nd));
+    else
     {
-      std::optional<std::string> child_ids;
-      q.getField(child_ids);
-      if(child_ids)
-        for(const auto& child_id : ext::string(*child_ids).split_string({','}))
-        {
-          pair_data_t nd;
-          nd.query.node_id = child_id;
-          nd.station.network_id = data.station.network_id;
-          return_data.emplace_back(nd);
-        }
+      if(return_data->query.child_ids && nd.query.child_ids)
+        return_data->query.child_ids->append(",").append(*nd.query.child_ids);
+      else if(nd.query.child_ids)
+        return_data->query.child_ids = nd.query.child_ids;
     }
   }
-
   return return_data;
-}
-
-std::list<query_info_t> DBInterface::recurseChildLocations(Network network_id, query_info_t qinfo, std::set<std::string>& node_ids)
-{
-  std::list<query_info_t> result;
-  for(auto& child : getChildLocations(network_id, qinfo))
-  {
-    if(!node_ids.contains(*child.node_id))
-    {
-      node_ids.insert(*child.node_id);
-
-      auto tmp = recurseChildLocations(network_id, child, node_ids);
-      if(tmp.empty())
-        result.push_back(child);
-      else
-        result.insert(std::end(result),
-                      std::make_move_iterator(std::begin(tmp)),
-                      std::make_move_iterator(std::end(tmp)));
-    }
-  }
-  return result;
 }
 
 void DBInterface::addMapLocation(const pair_data_t& data)
@@ -455,8 +400,12 @@ std::optional<std::string> DBInterface::identifyMapLocation(const pair_data_t& d
                                             "WHERE "
                                               "network_id IS ?1 AND "
                                               "node_id IS ?2 AND "
-                                              "ABS(latitude_max  - latitude_min ) <= ABS(?3 - ?4) AND "
-                                              "ABS(longitude_max - longitude_min) <= ABS(?5 - ?6)"
+                                              "latitude_max IS ?3 AND "
+                                              "latitude_min IS ?4 AND "
+                                              "longitude_max IS ?5 AND "
+                                              "longitude_min IS ?6"
+//                                              "ABS(latitude_max  - latitude_min ) <= ABS(?3 - ?4) AND "
+//                                              "ABS(longitude_max - longitude_min) <= ABS(?5 - ?6)"
                                             )
                            .arg(data.station.network_id)
                            .arg(data.query.node_id)
@@ -470,23 +419,11 @@ std::optional<std::string> DBInterface::identifyMapLocation(const pair_data_t& d
   return node_id;
 }
 
-std::list<pair_data_t> DBInterface::getMapLocationCache(const pair_data_t& data)
-{
-  std::list<pair_data_t> return_data;
-  std::set<std::string> node_ids;
-  std::list<query_info_t> nodes = recurseChildLocations(*data.station.network_id, data.query, node_ids);
-  for(const auto& qinfo : nodes)
-    return_data.emplace_back(pair_data_t{ qinfo, {}});
-  return return_data;
-}
-
-
 void DBInterface::addURL(const std::optional<std::string>& URL)
 {
   if(URL)
   {
-    sql::query q = std::move(m_db.build_query("INSERT INTO URLs (URL) VALUES (?1)")
-                             .arg(URL));
+    sql::query q = std::move(m_db.build_query("INSERT INTO URLs (URL) VALUES (?1)").arg(URL));
 
     while(!q.execute() && q.lastError() == SQLITE_BUSY);
     assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_CONSTRAINT_PRIMARYKEY);
@@ -498,8 +435,7 @@ std::optional<uint64_t> DBInterface::identifyURL(const std::optional<std::string
   std::optional<uint64_t> URL_id;
   if(URL)
   {
-    sql::query q = std::move(m_db.build_query("SELECT URL_id FROM URLs WHERE URL IS ?1")
-                  .arg(URL));
+    sql::query q = std::move(m_db.build_query("SELECT URL_id FROM URLs WHERE URL IS ?1").arg(URL));
 
     while(!q.execute() && q.lastError() == SQLITE_BUSY);
     assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_ROW);
@@ -515,8 +451,7 @@ std::optional<std::string> DBInterface::getURL(const std::optional<uint64_t> URL
   std::optional<std::string> URL;
   if(URL_id)
   {
-    sql::query q = std::move(m_db.build_query("SELECT URL FROM URLs WHERE URL_id IS ?1")
-                  .arg(URL_id));
+    sql::query q = std::move(m_db.build_query("SELECT URL FROM URLs WHERE URL_id IS ?1").arg(URL_id));
 
     while(!q.execute() && q.lastError() == SQLITE_BUSY);
     assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_ROW);
@@ -1064,8 +999,32 @@ port_t DBInterface::getPort(Network network_id, const std::string& port_id)
   port.price = getPrice(port.price.price_id);
   return port;
 }
+#if 0
+bool DBInterface::isStation(Network network_id, const std::string& station_id)
+{
+  bool found = false;
+  try
+  {
+    sql::query q = std::move(m_db.build_query("SELECT 1 FROM "
+                                                "stations "
+                                              "WHERE "
+                                                "network_id IS ?1 AND "
+                                                "station_id IS ?2")
+                             .arg(network_id)
+                             .arg(station_id));
 
+    while(!q.execute() && q.lastError() == SQLITE_BUSY);
+    assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_ROW);
 
+    found = q.fetchRow();
+  }
+  catch(std::string& error)
+  {
+    std::cerr << "sql error: " << error << std::endl;
+  }
+  return found;
+}
+#endif
 
 void DBInterface::addStation(station_t& station)
 {
@@ -1205,7 +1164,7 @@ station_t DBInterface::getStation(uint64_t contact_id)
                                                     "stations "
                                                   "WHERE "
                                                     "contact_id IS ?1")
-                             .arg(contact_id)));
+                                  .arg(contact_id)));
   }
   catch(std::string& error)
   {
@@ -1236,8 +1195,8 @@ station_t DBInterface::getStation(Network network_id, const std::string& station
                                                   "WHERE "
                                                     "network_id IS ?1 AND "
                                                     "station_id IS ?2")
-                             .arg(network_id)
-                             .arg(station_id)));
+                                .arg(network_id)
+                                .arg(station_id)));
   }
   catch(std::string& error)
   {
@@ -1268,8 +1227,8 @@ station_t DBInterface::getStation(double latitude, double longitude)
                                                   "WHERE "
                                                     "latitude IS ?1 AND "
                                                     "longitude IS ?2")
-                             .arg(latitude)
-                             .arg(longitude)));
+                                .arg(latitude)
+                                .arg(longitude)));
   }
   catch(std::string& error)
   {

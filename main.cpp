@@ -2,7 +2,6 @@
 #include <sys/stat.h>
 
 #include <list>
-#include <stack>
 #include <string>
 #include <iostream>
 #include <algorithm>
@@ -113,8 +112,8 @@ int main(int argc, char* argv[])
 
   std::list<std::pair<std::string, ScraperBase*>> scrapers =
   {
-    { "eptix", new EptixScraper() },
-    //{ "evgo", new EVGoScraper() },
+    //{ "eptix", new EptixScraper() },
+    { "evgo", new EVGoScraper() },
     //{ "electrify_america", new ElectrifyAmericaScraper() },
     //{ "chargehub", new ChargehubScraper() },
   };
@@ -168,7 +167,7 @@ int main(int argc, char* argv[])
       for(const auto& pair : scrapers)
       {
         insertion_count = 0;
-        std::vector<pair_data_t> data;
+        std::list<pair_data_t> main_queue;
         ScraperBase* scraper = pair.second;
         std::clog << pair.first << ": scraper active" << std::endl;
 
@@ -177,15 +176,15 @@ int main(int argc, char* argv[])
           pair_data_t nd;
           nd.query.parser = Parser::BuildQuery | Parser::Initial;
           nd.query.node_id = "root";
-          data.emplace_back(nd);
+          main_queue.emplace_back(nd);
         }
 
         std::unordered_set<std::string> station_nodes, port_nodes; // used to avoid duplicate requests
-        while(!data.empty())
+        for(;!main_queue.empty(); main_queue.pop_front())
         {
-          std::clog << "queue size: " << data.size() << std::endl;
-          auto pos = data.back();
-          data.pop_back();
+          auto& pos = main_queue.front();
+          std::clog << "queue size: " << main_queue.size() << std::endl;
+
 
           if(static_cast<typename std::underlying_type_t<Parser>>(pos.query.parser) &
              static_cast<typename std::underlying_type_t<Parser>>(Parser::BuildQuery))
@@ -199,17 +198,23 @@ int main(int argc, char* argv[])
               std::clog << "retry #" << i << std::endl;
             result = get_page(pair.first, pos);
           }
-          std::vector<pair_data_t> new_data = scraper->Parse(pos, result);
-          std::clog << "result count: " << new_data.size() << std::endl;
 
-          while(!new_data.empty())
+          std::list<pair_data_t> test_queue;
           {
-            auto nd = new_data.back();
-            new_data.pop_back();
-            switch(nd.query.parser)
+            std::vector<pair_data_t> tmp = scraper->Parse(pos, result);
+            test_queue = { std::begin(tmp), std::end(tmp) };
+          }
+          std::clog << "result count: " << test_queue.size() << std::endl;
+
+          for(;!test_queue.empty(); test_queue.pop_front())
+          {
+            auto& nd = test_queue.front();
+            switch(nd.query.parser)  // test the data
             {
               case Parser::Discard:
+                std::cout << "discarding" << std::endl;
                 break;
+
               case Parser::Complete:
                 db.addStation(nd.station), ++insertion_count;
                 break;
@@ -219,39 +224,64 @@ int main(int argc, char* argv[])
                 break;
 
               case Parser::BuildQuery | Parser::MapArea:
-                if(db.identifyMapLocation(nd))
+              {
+                bool lookup = false;
+                if(nd.query.bounds)
+                  lookup = bool(db.identifyMapLocation(nd));
+                else if(auto locdata = db.getMapLocation(*nd.station.network_id, *nd.query.node_id); locdata)
                 {
-                  auto cache = db.getMapLocation(nd);
-                  if(cache.empty())
-                    data.emplace_back(nd);
-                  else
+                  nd = *locdata;
+                  lookup = true;
+                }
+
+                if(lookup)
+                {
+                  scraper->classify(nd); // scraper decides parser this should use
+                  if(nd.query.child_ids) // has children
                   {
-                    for(auto& child : cache)
-                      scraper->classify(child);
-                    new_data.insert(std::begin(new_data),
-                                  std::make_move_iterator(std::begin(cache)),
-                                  std::make_move_iterator(std::end(cache)));
+                    for(auto& node_id : ext::string(*nd.query.child_ids).split_string({','}))
+                    {
+                      pair_data_t tmp;
+                      tmp.query.parser = Parser::BuildQuery | Parser::MapArea;
+                      tmp.query.node_id = node_id;
+                      tmp.station.network_id = nd.station.network_id;
+                      test_queue.emplace_back(tmp); // queue to be tested
+                    }
+                  }
+                  else // no children
+                  {
+                    if(nd.query.parser == (Parser::BuildQuery | Parser::MapArea)) // parser didn't change
+                      main_queue.emplace_back(nd); // more data is needed, queue for querying
+                    else
+                      test_queue.emplace_back(nd); // queue to be tested
                   }
                 }
                 else
                 {
                   db.addMapLocation(nd);
-                  data.emplace_back(nd);
+                  main_queue.emplace_back(nd);
                 }
                 break;
+              }
 
               case Parser::BuildQuery | Parser::Station:
                 if(auto id = *nd.query.node_id; !station_nodes.contains(id))
-                  station_nodes.insert(id),data.emplace_back(nd);
+                {
+                  station_nodes.insert(id);
+                  main_queue.emplace_back(nd);
+                }
                 break;
 
               case Parser::BuildQuery | Parser::Port:
                 if(auto id = *nd.query.node_id; !port_nodes.contains(id))
-                  port_nodes.insert(id),data.emplace_back(nd);
+                {
+                  port_nodes.insert(id);
+                  main_queue.emplace_back(nd);
+                }
                 break;
 
               default:
-                data.emplace_back(nd);
+                main_queue.emplace_back(nd);
             }
           }
         }

@@ -35,8 +35,7 @@ public:
   std::optional<uint64_t> identifyHours   (const std::optional<schedule_t::hours_t>& hours);
   std::optional<uint64_t> identifySchedule(const schedule_t& schedule);
 
-  std::list<pair_data_t> getMapLocationCache(const pair_data_t& data);
-  std::list<pair_data_t> getMapLocation(const pair_data_t& data);
+  std::optional<pair_data_t> getMapLocation(Network network_id, const std::string& node_id);
   std::optional<std::string> getURL(const std::optional<uint64_t> URL_id);
   contact_t getContact(const std::optional<uint64_t> contact_id);
   price_t getPrice(const std::optional<uint64_t> price_id);
@@ -49,8 +48,6 @@ public:
   station_t getStation(double latitude, double longitude);
 
 private:
-  std::list<query_info_t> getChildLocations(Network network_id, query_info_t qinfo);
-  std::list<query_info_t> recurseChildLocations(Network network_id, query_info_t qinfo, std::set<std::string>& node_ids);
   station_t getStation(sql::query&& q);
   sql::db m_db;
 };

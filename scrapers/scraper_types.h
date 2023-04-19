@@ -151,6 +151,8 @@ struct bound_t
   double max;
   double min;
 
+  constexpr operator bool(void) const { return max != 0.0 && min != 0.0; }
+
   constexpr void shift(double i) { max += i; min += i; }
 
   constexpr void scale_centered(double s)
@@ -171,6 +173,8 @@ struct map_bounds_t
 
   constexpr coords_t northEast(void) const { return { latitude.max, longitude.max }; }
   constexpr coords_t southWest(void) const { return { latitude.min, longitude.min }; }
+
+  constexpr operator bool(void) const { return latitude && longitude; }
 
   constexpr coords_t getFocus(void) const
   {
@@ -199,6 +203,7 @@ struct map_bounds_t
 
 struct query_info_t
 {
+  query_info_t(void) : parser(Parser::Discard) { }
   Parser parser;
   std::string URL;
   std::string post_data;
