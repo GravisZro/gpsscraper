@@ -21,6 +21,7 @@ DBInterface::DBInterface(std::string_view filename)
 
   const std::list<std::string_view> init_commands =
   {
+    "PRAGMA synchronous = OFF",
     "PRAGMA journal_mode = MEMORY",
 
     R"(
@@ -30,8 +31,8 @@ DBInterface::DBInterface(std::string_view filename)
       "latitude_min"    REAL NOT NULL CHECK (latitude_min  >  -90.0 AND latitude_min  <  90.0),
       "longitude_max"   REAL NOT NULL CHECK (longitude_max > -180.0 AND longitude_max < 180.0),
       "longitude_min"   REAL NOT NULL CHECK (longitude_min > -180.0 AND longitude_min < 180.0),
-      "node_id"         INTEGER DEFAULT NULL,
-      "child_ids"       BLOB    DEFAULT NULL,
+      "node_id"         TEXT DEFAULT NULL,
+      "child_ids"       TEXT DEFAULT NULL,
       "last_update" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
     ) )",
 
@@ -77,16 +78,17 @@ DBInterface::DBInterface(std::string_view filename)
     R"(
     CREATE TABLE IF NOT EXISTS stations (
       "network_id"    INTEGER NOT NULL,
-      "station_id"    INTEGER NOT NULL,
+      "station_id"    TEXT NOT NULL,
       "latitude"      REAL NOT NULL CHECK (latitude  >  -90.0 AND latitude  <  90.0),
       "longitude"     REAL NOT NULL CHECK (longitude > -180.0 AND longitude < 180.0),
       "name"          TEXT NOT NULL,
       "description"   TEXT DEFAULT NULL,
       "access_public" BOOLEAN DEFAULT NULL,
+      "functional"    BOOLEAN DEFAULT NULL,
       "restrictions"  TEXT DEFAULT NULL,
       "contact_id"    INTEGER DEFAULT NULL,
       "schedule_id"   INTEGER DEFAULT NULL,
-      "port_ids"      BLOB NOT NULL,
+      "port_ids"      TEXT NOT NULL,
       "last_update"   TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
       PRIMARY KEY (latitude, longitude)
     ) )",
@@ -94,8 +96,8 @@ DBInterface::DBInterface(std::string_view filename)
     R"(
     CREATE TABLE IF NOT EXISTS ports (
       "network_id"    INTEGER NOT NULL,
-      "port_id"       INTEGER NOT NULL,
-      "station_id"    INTEGER NOT NULL,
+      "port_id"       TEXT NOT NULL,
+      "station_id"    TEXT NOT NULL,
       "power_id"      INTEGER DEFAULT NULL,
       "price_id"      INTEGER DEFAULT NULL,
       "display_name"  TEXT DEFAULT NULL,
@@ -125,6 +127,7 @@ DBInterface::DBInterface(std::string_view filename)
         NEW.city IS city AND
         NEW.state IS state AND
         NEW.country IS country AND
+        NEW.postal_code IS postal_code AND
         NEW.phone_number IS phone_number AND
         NEW.URL_id IS URL_id)
       BEGIN
@@ -322,45 +325,79 @@ std::list<query_info_t> DBInterface::getChildLocations(Network network_id, query
 {
   std::list<query_info_t> children;
 
-  for(auto& child_id : qinfo.child_ids)
+  if(qinfo.child_ids)
+    for(auto& child_id : *qinfo.child_ids)
+    {
+      sql::query q = std::move(m_db.build_query("SELECT "
+                                                  "latitude_max,"
+                                                  "latitude_min,"
+                                                  "longitude_max,"
+                                                  "longitude_min,"
+                                                  "node_id,"
+                                                  "child_ids "
+                                                "FROM "
+                                                  "map_query_cache "
+                                                "WHERE "
+                                                  "network_id IS ?1 AND "
+                                                  "node_id IS ?2")
+                               .arg(network_id)
+                               .arg(child_id));
+      while(!q.execute() && q.lastError() == SQLITE_BUSY);
+
+      while(q.fetchRow())
+      {
+        query_info_t nqi;
+
+        q.getField(nqi.bounds.latitude.max)
+            .getField(nqi.bounds.latitude.min)
+            .getField(nqi.bounds.longitude.max)
+            .getField(nqi.bounds.longitude.min)
+            .getField(nqi.node_id)
+            .getField(nqi.child_ids);
+
+        children.emplace_back(std::move(nqi));
+      }
+    }
+  return children;
+}
+
+std::list<pair_data_t> DBInterface::getMapLocation(const pair_data_t& data)
+{
+  std::list<pair_data_t> return_data;
+
+  MUST(data.station.network_id && data.query.node_id)
   {
     sql::query q = std::move(m_db.build_query("SELECT "
-                                                "latitude_max,"
-                                                "latitude_min,"
-                                                "longitude_max,"
-                                                "longitude_min,"
-                                                "node_id,"
                                                 "child_ids "
                                               "FROM "
                                                 "map_query_cache "
                                               "WHERE "
                                                 "network_id IS ?1 AND "
                                                 "node_id IS ?2")
-                             .arg(network_id)
-                             .arg(child_id));
+                             .arg(data.station.network_id)
+                             .arg(data.query.node_id));
     while(!q.execute() && q.lastError() == SQLITE_BUSY);
+    assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_ROW);
 
-    while(q.fetchRow())
+    MUST(q.fetchRow())
     {
-      query_info_t nqi;
-      std::vector<uint8_t> blob;
-
-      nqi.parser = Parser::BuildQuery | Parser::MapArea;
-      q.getField(nqi.bounds.latitude.max)
-          .getField(nqi.bounds.latitude.min)
-          .getField(nqi.bounds.longitude.max)
-          .getField(nqi.bounds.longitude.min)
-          .getField(nqi.node_id)
-          .getField(blob);
-
-      nqi.child_ids = blob;
-      children.emplace_back(nqi);
+      std::optional<std::string> child_ids;
+      q.getField(child_ids);
+      if(child_ids)
+        for(const auto& child_id : ext::string(*child_ids).split_string({','}))
+        {
+          pair_data_t nd;
+          nd.query.node_id = child_id;
+          nd.station.network_id = data.station.network_id;
+          return_data.emplace_back(nd);
+        }
     }
   }
-  return children;
+
+  return return_data;
 }
 
-std::list<query_info_t> DBInterface::recurseChildLocations(Network network_id, query_info_t qinfo, std::set<uint64_t>& node_ids)
+std::list<query_info_t> DBInterface::recurseChildLocations(Network network_id, query_info_t qinfo, std::set<std::string>& node_ids)
 {
   std::list<query_info_t> result;
   for(auto& child : getChildLocations(network_id, qinfo))
@@ -401,16 +438,16 @@ void DBInterface::addMapLocation(const pair_data_t& data)
                              .arg(data.query.bounds.longitude.max)
                              .arg(data.query.bounds.longitude.min)
                              .arg(data.query.node_id)
-                             .arg(static_cast<std::vector<uint8_t>>(data.query.child_ids)));
+                             .arg(data.query.child_ids));
 
     while(!q.execute() && q.lastError() == SQLITE_BUSY);
     assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_CONSTRAINT_TRIGGER);
   }
 }
 
-std::optional<uint64_t> DBInterface::identifyMapLocation(const pair_data_t& data)
+std::optional<std::string> DBInterface::identifyMapLocation(const pair_data_t& data)
 {
-  std::optional<uint64_t> node_id;
+  std::optional<std::string> node_id;
   sql::query q = std::move(m_db.build_query("SELECT "
                                               "node_id "
                                             "FROM "
@@ -436,7 +473,7 @@ std::optional<uint64_t> DBInterface::identifyMapLocation(const pair_data_t& data
 std::list<pair_data_t> DBInterface::getMapLocationCache(const pair_data_t& data)
 {
   std::list<pair_data_t> return_data;
-  std::set<uint64_t> node_ids;
+  std::set<std::string> node_ids;
   std::list<query_info_t> nodes = recurseChildLocations(*data.station.network_id, data.query, node_ids);
   for(const auto& qinfo : nodes)
     return_data.emplace_back(pair_data_t{ qinfo, {}});
@@ -496,6 +533,7 @@ void DBInterface::addContact(const contact_t& contact)
   std::optional<uint64_t> URL_id = identifyURL(contact.URL);
   if(contact)
   {
+    //std::cout << "adding " << contact << std::endl;
     sql::query q = std::move(m_db.build_query("INSERT INTO contact ("
                                                 "street_number,"
                                                 "street_name,"
@@ -507,12 +545,12 @@ void DBInterface::addContact(const contact_t& contact)
                                                 "URL_id"
                                               ") VALUES (?1,?2,?3,?4,?5,?6,?7,?8)")
                              .arg(contact.street_number)
-                             .arg(contact.street_name, sql::reference)
-                             .arg(contact.city, sql::reference)
-                             .arg(contact.state, sql::reference)
-                             .arg(contact.country, sql::reference)
-                             .arg(contact.postal_code, sql::reference)
-                             .arg(contact.phone_number, sql::reference)
+                             .arg(contact.street_name)
+                             .arg(contact.city)
+                             .arg(contact.state)
+                             .arg(contact.country)
+                             .arg(contact.postal_code)
+                             .arg(contact.phone_number)
                              .arg(URL_id));
 
     while(!q.execute() && q.lastError() == SQLITE_BUSY);
@@ -537,11 +575,11 @@ std::optional<uint64_t> DBInterface::identifyContact(const contact_t& contact)
                                                 "country IS ?5 AND "
                                                 "postal_code IS ?6")
                              .arg(contact.street_number)
-                             .arg(contact.street_name, sql::reference)
-                             .arg(contact.city, sql::reference)
-                             .arg(contact.state, sql::reference)
-                             .arg(contact.country, sql::reference)
-                             .arg(contact.postal_code, sql::reference));
+                             .arg(contact.street_name)
+                             .arg(contact.city)
+                             .arg(contact.state)
+                             .arg(contact.country)
+                             .arg(contact.postal_code));
 
     while(!q.execute() && q.lastError() == SQLITE_BUSY);
     assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_ROW);
@@ -601,6 +639,7 @@ void DBInterface::addPrice(const price_t& price)
 {
   if(price)
   {
+    //std::cout << "adding " << price << std::endl;
     sql::query q = std::move(m_db.build_query("INSERT INTO price ("
                                                 "text,"
                                                 "payment,"
@@ -610,7 +649,7 @@ void DBInterface::addPrice(const price_t& price)
                                                 "unit,"
                                                 "per_unit"
                                               ") VALUES (?1,?2,?3,?4,?5,?6,?7)")
-                             .arg(price.text, sql::reference)
+                             .arg(price.text)
                              .arg(price.payment)
                              .arg(price.currency)
                              .arg(price.minimum)
@@ -640,7 +679,7 @@ std::optional<uint64_t> DBInterface::identifyPrice(const price_t& price)
                                                 "initial IS ?5 AND "
                                                 "unit IS ?6 AND "
                                                 "per_unit IS ?7")
-                             .arg(price.text, sql::reference)
+                             .arg(price.text)
                              .arg(price.payment)
                              .arg(price.currency)
                              .arg(price.minimum)
@@ -697,6 +736,7 @@ void DBInterface::addPower(const power_t& power)
 {
   if(power)
   {
+    //std::cout << "adding " << power << std::endl;
     sql::query q = std::move(m_db.build_query("INSERT INTO power ("
                                                 "level,"
                                                 "connector,"
@@ -986,13 +1026,13 @@ void DBInterface::addPort(port_t& port)
                            .arg(port.station_id)
                            .arg(port.power.power_id)
                            .arg(port.price.price_id)
-                           .arg(port.display_name, sql::reference));
+                           .arg(port.display_name));
 
   while(!q.execute() && q.lastError() == SQLITE_BUSY);
   assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_CONSTRAINT_PRIMARYKEY);
 }
 
-port_t DBInterface::getPort(Network network_id, uint64_t port_id)
+port_t DBInterface::getPort(Network network_id, const std::string& port_id)
 {
   port_t port;
   port.network_id = network_id;
@@ -1034,9 +1074,9 @@ void DBInterface::addStation(station_t& station)
     station_t existing = getStation(*station.network_id, *station.station_id);
 
     assert(!station.ports.empty());
-    serializable<std::vector<uint64_t>> port_ids;
+    ext::string port_ids;
     for(auto& port : station.ports)
-      port_ids.push_back(*port.port_id);
+      port_ids.list_append(',', *port.port_id);
 
     { // sync contact structs
       contact_t contact;
@@ -1083,22 +1123,24 @@ void DBInterface::addStation(station_t& station)
                                                 "name,"
                                                 "description,"
                                                 "access_public,"
+                                                "functional,"
                                                 "restrictions,"
                                                 "contact_id,"
                                                 "schedule_id,"
                                                 "port_ids"
-                                              ") VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)")
+                                              ") VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)")
                              .arg(station.network_id)
                              .arg(station.station_id)
                              .arg(station.location.latitude)
                              .arg(station.location.longitude)
-                             .arg(station.name, sql::reference)
-                             .arg(station.description, sql::reference)
+                             .arg(station.name)
+                             .arg(station.description)
                              .arg(station.access_public)
-                             .arg(station.restrictions, sql::reference)
+                             .arg(station.functional)
+                             .arg(station.restrictions)
                              .arg(station.contact.contact_id)
                              .arg(station.schedule.schedule_id)
-                             .arg(static_cast<std::vector<uint8_t>>(port_ids)));
+                             .arg(static_cast<std::string&>(port_ids)));
 
     while(!q.execute() && q.lastError() == SQLITE_BUSY);
     assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_CONSTRAINT_PRIMARYKEY);
@@ -1112,14 +1154,13 @@ void DBInterface::addStation(station_t& station)
 station_t DBInterface::getStation(sql::query&& q)
 {
   station_t station;
-  serializable<std::vector<uint64_t>> port_ids;
+  ext::string port_ids;
 
   while(!q.execute() && q.lastError() == SQLITE_BUSY);
   assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_ROW);
 
   if(q.fetchRow())
   {
-    std::vector<uint8_t> blob;
     q.getField(station.network_id)
      .getField(station.station_id)
      .getField(station.location.latitude)
@@ -1127,19 +1168,18 @@ station_t DBInterface::getStation(sql::query&& q)
      .getField(station.name)
      .getField(station.description)
      .getField(station.access_public)
+     .getField(station.functional)
      .getField(station.restrictions)
      .getField(station.contact.contact_id)
      .getField(station.schedule.schedule_id)
-     .getField(blob);
+     .getField(static_cast<std::string&>(port_ids));
 
-    port_ids = blob;
+    for(const auto& port_id : port_ids.split_string({','}))
+      station.ports.emplace_back(getPort(*station.network_id, port_id));
+
+    station.contact = getContact(station.contact.contact_id);
+    station.schedule = getSchedule(station.schedule.schedule_id);
   }
-
-  for(auto port_id : port_ids)
-    station.ports.emplace_back(getPort(*station.network_id, port_id));
-
-  station.contact = getContact(station.contact.contact_id);
-  station.schedule = getSchedule(station.schedule.schedule_id);
 
   return station;
 }
@@ -1148,22 +1188,23 @@ station_t DBInterface::getStation(uint64_t contact_id)
 {
   try
   {
-    return getStation(std::move(m_db.build_query("SELECT "
-                                                "network_id,"
-                                                "station_id,"
-                                                "latitude,"
-                                                "longitude,"
-                                                "name,"
-                                                "description,"
-                                                "access_public,"
-                                                "restrictions,"
-                                                "contact_id,"
-                                                "schedule_id,"
-                                                "port_ids "
-                                              "FROM "
-                                                "stations "
-                                              "WHERE "
-                                                "contact_id IS ?1")
+    return getStation(std::move(m_db.build_query( "SELECT "
+                                                    "network_id,"
+                                                    "station_id,"
+                                                    "latitude,"
+                                                    "longitude,"
+                                                    "name,"
+                                                    "description,"
+                                                    "access_public,"
+                                                    "functional,"
+                                                    "restrictions,"
+                                                    "contact_id,"
+                                                    "schedule_id,"
+                                                    "port_ids "
+                                                  "FROM "
+                                                    "stations "
+                                                  "WHERE "
+                                                    "contact_id IS ?1")
                              .arg(contact_id)));
   }
   catch(std::string& error)
@@ -1173,27 +1214,28 @@ station_t DBInterface::getStation(uint64_t contact_id)
   return {};
 }
 
-station_t DBInterface::getStation(Network network_id, uint64_t station_id)
+station_t DBInterface::getStation(Network network_id, const std::string& station_id)
 {
   try
   {
-    return getStation(std::move(m_db.build_query("SELECT "
-                                                "network_id,"
-                                                "station_id,"
-                                                "latitude,"
-                                                "longitude,"
-                                                "name,"
-                                                "description,"
-                                                "access_public,"
-                                                "restrictions,"
-                                                "contact_id,"
-                                                "schedule_id,"
-                                                "port_ids "
-                                              "FROM "
-                                                "stations "
-                                              "WHERE "
-                                                "network_id IS ?1 AND "
-                                                "station_id IS ?2")
+    return getStation(std::move(m_db.build_query( "SELECT "
+                                                    "network_id,"
+                                                    "station_id,"
+                                                    "latitude,"
+                                                    "longitude,"
+                                                    "name,"
+                                                    "description,"
+                                                    "access_public,"
+                                                    "functional,"
+                                                    "restrictions,"
+                                                    "contact_id,"
+                                                    "schedule_id,"
+                                                    "port_ids "
+                                                  "FROM "
+                                                    "stations "
+                                                  "WHERE "
+                                                    "network_id IS ?1 AND "
+                                                    "station_id IS ?2")
                              .arg(network_id)
                              .arg(station_id)));
   }
@@ -1208,23 +1250,24 @@ station_t DBInterface::getStation(double latitude, double longitude)
 {
   try
   {
-    return getStation(std::move(m_db.build_query("SELECT "
-                                                "network_id,"
-                                                "station_id,"
-                                                "latitude,"
-                                                "longitude,"
-                                                "name,"
-                                                "description,"
-                                                "access_public,"
-                                                "restrictions,"
-                                                "contact_id,"
-                                                "schedule_id,"
-                                                "port_ids "
-                                              "FROM "
-                                                "stations "
-                                              "WHERE "
-                                                "latitude IS ?1 AND "
-                                                "longitude IS ?2")
+    return getStation(std::move(m_db.build_query( "SELECT "
+                                                    "network_id,"
+                                                    "station_id,"
+                                                    "latitude,"
+                                                    "longitude,"
+                                                    "name,"
+                                                    "description,"
+                                                    "access_public,"
+                                                    "functional,"
+                                                    "restrictions,"
+                                                    "contact_id,"
+                                                    "schedule_id,"
+                                                    "port_ids "
+                                                  "FROM "
+                                                    "stations "
+                                                  "WHERE "
+                                                    "latitude IS ?1 AND "
+                                                    "longitude IS ?2")
                              .arg(latitude)
                              .arg(longitude)));
   }

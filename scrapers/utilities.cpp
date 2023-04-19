@@ -134,7 +134,7 @@ namespace ext
     for(char target : targets)
     {
       current = rfind(target, pos);
-      if(current > last)
+      if(current > last || last == std::string::npos)
         last = current;
     }
     return last;
@@ -149,16 +149,24 @@ namespace ext
           end != std::string::npos)
     {
       rlist.push_back(slice(offset, end));
-      ++offset;
+      offset = end + 1;
     }
 
     if(offset = last_occurence(splitters),
        offset != std::string::npos)
-      rlist.push_back(substr(offset));
+      rlist.push_back(substr(offset + 1));
     else
       rlist.push_back(*this);
 
     return rlist;
+  }
+
+  string& string::list_append(const char deliminator, const std::string& item)
+  {
+    if(!empty())
+      push_back(deliminator);
+    append(item);
+    return *this;
   }
 
 

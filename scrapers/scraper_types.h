@@ -1,17 +1,15 @@
 #ifndef SCRAPER_TYPES_H
 #define SCRAPER_TYPES_H
 
+#include <ostream>
 #include <optional>
 #include <string>
 #include <vector>
 #include <list>
 #include <array>
-#include <chrono>
 
 #include <cstdint>
 #include <cmath>
-
-#include "utilities.h"
 
 enum class Connector : uint8_t
 {
@@ -84,6 +82,8 @@ enum class Network : uint8_t
   Voita = 19,
   Webasto = 7,
   ZEF_Energy = 25,
+
+  ChargeHub = 128,
 };
 
 enum class Parser : uint8_t
@@ -109,8 +109,8 @@ enum class Parser : uint8_t
 
 enum class Unit : uint8_t
 {
-  Kilowatts = 0,
-  Watts,
+  KilowattHours = 0,
+  WattHours,
   Minutes,
   Hours,
 };
@@ -169,8 +169,8 @@ struct map_bounds_t
   bound_t latitude;
   bound_t longitude;
 
-  constexpr coords_t northEast(void) { return { latitude.max, longitude.max }; }
-  constexpr coords_t southWest(void) { return { latitude.min, longitude.min }; }
+  constexpr coords_t northEast(void) const { return { latitude.max, longitude.max }; }
+  constexpr coords_t southWest(void) const { return { latitude.min, longitude.min }; }
 
   constexpr coords_t getFocus(void) const
   {
@@ -188,9 +188,9 @@ struct map_bounds_t
     longitude.shift(new_focus.longitude - old_focus.longitude);
   }
 
-  void zoom(const int zoom)
+  void zoom(const double zoom)
   {
-    double factor = 1.0 / std::pow(2, zoom);
+    double factor = 1.0 / std::pow(2.0, zoom);
     latitude.scale_centered(factor);
     longitude.scale_centered(factor);
   }
@@ -205,8 +205,8 @@ struct query_info_t
   std::list<std::pair<std::string, std::string>> header_fields;
   // map fields
   map_bounds_t bounds;
-  std::optional<uint64_t> node_id;
-  serializable<std::vector<uint64_t>> child_ids;
+  std::optional<std::string> node_id;
+  std::optional<std::string> child_ids;
 };
 
 struct power_t
@@ -272,9 +272,10 @@ struct schedule_t
 
 struct port_t
 {
+  port_t(void) : weird(false) { }
   std::optional<Network>  network_id;
-  std::optional<uint64_t> station_id;
-  std::optional<uint64_t> port_id;
+  std::optional<std::string> station_id;
+  std::optional<std::string> port_id;
 
   power_t power;
   contact_t contact;
@@ -289,7 +290,7 @@ struct port_t
 struct station_t
 {
   std::optional<Network>  network_id;
-  std::optional<uint64_t> station_id;
+  std::optional<std::string> station_id;
 
   coords_t location;
 
@@ -297,6 +298,7 @@ struct station_t
   std::optional<std::string> description;
 
   std::optional<bool> access_public;
+  std::optional<bool> functional;
   std::optional<std::string> restrictions;
 
   power_t power;
@@ -315,6 +317,27 @@ struct pair_data_t
   query_info_t query;
   station_t station;
 };
+
+
+
+template<typename T>
+std::ostream & operator << (std::ostream &out, const std::optional<T>& value) noexcept
+{
+  if(!value)
+    out << "null,";
+  else
+    out << *value;
+  return out;
+}
+
+std::ostream & operator << (std::ostream &out, const Connector value) noexcept;
+std::ostream & operator << (std::ostream &out, const Payment value) noexcept;
+std::ostream & operator << (std::ostream &out, const Unit value) noexcept;
+std::ostream & operator << (std::ostream &out, const Currency value) noexcept;
+
+std::ostream & operator << (std::ostream &out, const contact_t& value) noexcept;
+std::ostream & operator << (std::ostream &out, const price_t& value) noexcept;
+std::ostream & operator << (std::ostream &out, const power_t& value) noexcept;
 
 
 #endif // SCRAPER_TYPES_H

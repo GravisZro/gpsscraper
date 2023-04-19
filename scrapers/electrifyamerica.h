@@ -6,12 +6,13 @@
 class ElectrifyAmericaScraper : public ScraperBase
 {
 public:
-  std::vector<pair_data_t> Parse(const pair_data_t& data, const std::string& input);
-  pair_data_t BuildQuery(const pair_data_t& data);
+  void classify([[maybe_unused]] pair_data_t& record) const {}
+  std::vector<pair_data_t> Parse(const pair_data_t& data, const std::string& input) const;
+  pair_data_t BuildQuery(const pair_data_t& data) const;
 
 private:
-  std::vector<pair_data_t> ParseMapArea(const pair_data_t& data, const std::string& input);
-  std::vector<pair_data_t> ParseStation(const pair_data_t& data, const std::string& input);
+  std::vector<pair_data_t> ParseMapArea(const pair_data_t& data, const std::string& input) const;
+  std::vector<pair_data_t> ParseStation(const pair_data_t& data, const std::string& input) const;
 };
 
 #endif // ELECTRIFYAMERICA_H

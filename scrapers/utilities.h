@@ -70,6 +70,7 @@ namespace ext
     size_t last_occurence(const std::set<char>& targets, size_t pos = std::string::npos) const noexcept;
     size_t first_occurence(const std::set<char>& targets, size_t pos = std::string::npos) const noexcept;
     std::list<std::string> split_string(const std::set<char>& splitters) const noexcept;
+    string& list_append(const char deliminator, const std::string& item);
 
     size_t find_before_or_throw(const std::string& other, size_t pos, int throw_value) const;
     size_t find_after_or_throw(const std::string& other, size_t pos, int throw_value) const;
@@ -83,7 +84,7 @@ namespace ext
 
 // shortJSON helpers
 template<int line_number>
-inline std::optional<bool> safe_bool(shortjson::node_t& node)
+inline std::optional<bool> safe_bool(const shortjson::node_t& node)
 {
   if(node.type == shortjson::Field::Boolean)
     return node.toBool();
@@ -93,17 +94,21 @@ inline std::optional<bool> safe_bool(shortjson::node_t& node)
 }
 
 template<int line_number>
-inline std::optional<std::string> safe_string(shortjson::node_t& node)
+inline std::optional<std::string> safe_string(const shortjson::node_t& node)
 {
   if(node.type == shortjson::Field::String)
     return node.toString();
+  if(node.type == shortjson::Field::Integer)
+    return std::to_string(node.toNumber());
+  if(node.type == shortjson::Field::Float)
+    return std::to_string(node.toFloat());
   if(node.type == shortjson::Field::Null)
     return std::optional<std::string>();
   throw line_number;
 }
 
 template<int line_number, typename int_type = int32_t>
-inline std::optional<int_type> safe_int(shortjson::node_t& node)
+inline std::optional<int_type> safe_int(const shortjson::node_t& node)
 {
   if(node.type == shortjson::Field::Integer)
     return int_type(node.toNumber());
@@ -113,7 +118,7 @@ inline std::optional<int_type> safe_int(shortjson::node_t& node)
 }
 
 template<int line_number>
-inline double safe_float64(shortjson::node_t& node)
+inline double safe_float64(const shortjson::node_t& node)
 {
   if(node.type == shortjson::Field::Integer)
     return node.toNumber();
@@ -123,7 +128,7 @@ inline double safe_float64(shortjson::node_t& node)
 }
 
 template<int line_number>
-inline float safe_float_unit(shortjson::node_t& node)
+inline float safe_float_unit(const shortjson::node_t& node)
 {
   if(node.type == shortjson::Field::String)
     return std::stof(node.toString());

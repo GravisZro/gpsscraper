@@ -7,6 +7,8 @@
 #include <iostream>
 #include <algorithm>
 #include <unordered_set>
+#include <fstream>
+
 #include <cctype>
 #include <cassert>
 #include <cmath>
@@ -44,16 +46,6 @@ bool list_sorter(const std::pair<std::string, ScraperBase*>& first,
   { return first.first < second.first; }
 
 
-template<typename T>
-std::ostream & operator << (std::ostream &out, const std::optional<T>& value) noexcept
-{
-  if(!value)
-    out << "null,";
-  else
-    out << *value;
-  return out;
-}
-
 static SimpleCurl& static_request(void)
 {
   static SimpleCurl request;
@@ -88,8 +80,16 @@ std::string get_page(const std::string& name, const pair_data_t& data)
   std::cout << "requesting: " << data.query.URL << std::endl;
   if(!data.query.post_data.empty())
     std::cout << "  with post data: " << data.query.post_data << std::endl;
-
-  if((!request.setOpt(CURLOPT_URL, data.query.URL) ||
+#ifdef DEBUG
+  if(data.query.URL == "https://api.eptix.co/public/v1/sites/all?showConstruction=0")
+  {
+    std::ifstream ifs("eptix_index.json");
+    output.assign((std::istreambuf_iterator<char>(ifs) ),
+                  (std::istreambuf_iterator<char>()    ));
+  }
+  else
+#endif
+    if((!request.setOpt(CURLOPT_URL, data.query.URL) ||
       !request.perform()) &&
      request.getLastError() != CURLE_REMOTE_ACCESS_DENIED)
   {
@@ -116,7 +116,7 @@ int main(int argc, char* argv[])
     { "eptix", new EptixScraper() },
     //{ "evgo", new EVGoScraper() },
     //{ "electrify_america", new ElectrifyAmericaScraper() },
-    //{ "chargehub", new ChargehubScraper ( /* 40.5, 40.75 */ ) },
+    //{ "chargehub", new ChargehubScraper() },
   };
 
 
@@ -176,13 +176,14 @@ int main(int argc, char* argv[])
         {
           pair_data_t nd;
           nd.query.parser = Parser::BuildQuery | Parser::Initial;
-          nd.query.node_id = 0;
+          nd.query.node_id = "root";
           data.emplace_back(nd);
         }
 
-        std::unordered_set<uint64_t> station_nodes, port_nodes; // used to avoid duplicate requests
+        std::unordered_set<std::string> station_nodes, port_nodes; // used to avoid duplicate requests
         while(!data.empty())
         {
+          std::clog << "queue size: " << data.size() << std::endl;
           auto pos = data.back();
           data.pop_back();
 
@@ -201,8 +202,10 @@ int main(int argc, char* argv[])
           std::vector<pair_data_t> new_data = scraper->Parse(pos, result);
           std::clog << "result count: " << new_data.size() << std::endl;
 
-          for(auto& nd : new_data)
+          while(!new_data.empty())
           {
+            auto nd = new_data.back();
+            new_data.pop_back();
             switch(nd.query.parser)
             {
               case Parser::Discard:
@@ -216,7 +219,21 @@ int main(int argc, char* argv[])
                 break;
 
               case Parser::BuildQuery | Parser::MapArea:
-                if(!db.identifyMapLocation(nd))
+                if(db.identifyMapLocation(nd))
+                {
+                  auto cache = db.getMapLocation(nd);
+                  if(cache.empty())
+                    data.emplace_back(nd);
+                  else
+                  {
+                    for(auto& child : cache)
+                      scraper->classify(child);
+                    new_data.insert(std::begin(new_data),
+                                  std::make_move_iterator(std::begin(cache)),
+                                  std::make_move_iterator(std::end(cache)));
+                  }
+                }
+                else
                 {
                   db.addMapLocation(nd);
                   data.emplace_back(nd);

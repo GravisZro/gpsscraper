@@ -29,7 +29,17 @@ constexpr bool inside_bound(double value, double origin, double distance)
          value > lower_bound(origin, distance);
 }
 */
-pair_data_t EVGoScraper::BuildQuery(const pair_data_t& input)
+
+void EVGoScraper::classify(pair_data_t& record) const
+{
+
+  if(record.query.child_ids)
+    record.query.parser = Parser::BuildQuery | Parser::MapArea;
+  else
+    record.query.parser = Parser::BuildQuery | Parser::Station;
+}
+
+pair_data_t EVGoScraper::BuildQuery(const pair_data_t& input) const
 {
   pair_data_t data = input;
   data.station.network_id = Network::EVgo;
@@ -71,19 +81,19 @@ pair_data_t EVGoScraper::BuildQuery(const pair_data_t& input)
     case Parser::BuildQuery | Parser::Station:
       data.query.parser = Parser::Station;
       data.query.URL = "https://account.evgo.com/stationFacade/findStationsBySiteId";
-      data.query.post_data = "{\"filterByIsManaged\":true,\"filterBySiteId\":" +  std::to_string(*data.query.node_id) +"}";
+      data.query.post_data = "{\"filterByIsManaged\":true,\"filterBySiteId\":" +  *data.query.node_id +"}";
       data.query.header_fields = { { "Content-Type", "application/json" } };
       break;
 
     case Parser::BuildQuery | Parser::Port:
       data.query.parser = Parser::Port;
-      data.query.URL = "https://account.evgo.com/stationFacade/findStationById?stationId=" + std::to_string(*data.query.node_id);
+      data.query.URL = "https://account.evgo.com/stationFacade/findStationById?stationId=" + *data.query.node_id;
       break;
   }
   return data;
 }
 
-std::vector<pair_data_t> EVGoScraper::Parse(const pair_data_t& data, const std::string& input)
+std::vector<pair_data_t> EVGoScraper::Parse(const pair_data_t& data, const std::string& input) const
 {
   try
   {
@@ -151,21 +161,22 @@ inline shortjson::node_t response_parse(const std::string& input)
   return *pos;
 }
 
-std::vector<pair_data_t> EVGoScraper::ParseMapArea(const pair_data_t& data, const std::string& input)
+std::vector<pair_data_t> EVGoScraper::ParseMapArea(const pair_data_t& data, const std::string& input) const
 {
   std::vector<pair_data_t> return_data;
-  std::vector<uint64_t> child_ids;
+  ext::string child_ids;
   auto response = response_parse(input);
 
-  for(shortjson::node_t& nodeL0 : response.toArray())
+  for(const shortjson::node_t& nodeL0 : response.toArray())
   {
-    std::optional<uint64_t> quantity, id;
+    std::optional<uint64_t> quantity;
     std::optional<double> latitude, longitude;
+    std::optional<std::string> id;
 
     if(nodeL0.type != shortjson::Field::Object)
       throw __LINE__;
 
-    for(shortjson::node_t& nodeL1 : nodeL0.toObject())
+    for(const shortjson::node_t& nodeL1 : nodeL0.toObject())
     {
       if(nodeL1.identifier == "@class")
       {
@@ -176,7 +187,11 @@ std::vector<pair_data_t> EVGoScraper::ParseMapArea(const pair_data_t& data, cons
       else if(nodeL1.identifier == "q")
         quantity = safe_int<__LINE__>(nodeL1);
       else if(nodeL1.identifier == "id")
-        id = safe_int<__LINE__>(nodeL1);
+      {
+        if(nodeL1.type != shortjson::Field::String)
+          throw __LINE__;
+        id = nodeL1.toString();
+      }
       else if(nodeL1.identifier == "latitude")
         latitude = safe_float64<__LINE__>(nodeL1);
       else if(nodeL1.identifier == "longitude")
@@ -195,7 +210,7 @@ std::vector<pair_data_t> EVGoScraper::ParseMapArea(const pair_data_t& data, cons
       else
       {
         nd.query.node_id = id;
-        child_ids.push_back(*id);
+        child_ids.list_append(',', *id);
       }
       nd.query.bounds = data.query.bounds; // copy bounding box
       nd.query.bounds.setFocus({ *latitude, *longitude }); // move box to new location
@@ -211,25 +226,26 @@ std::vector<pair_data_t> EVGoScraper::ParseMapArea(const pair_data_t& data, cons
   {
     pair_data_t nd = data;
     nd.query.parser = Parser::UpdateRecord | Parser::MapArea;
-    nd.query.child_ids = child_ids;
-    return_data.emplace(std::begin(return_data), nd);
+    if(!child_ids.empty())
+      nd.query.child_ids = child_ids;
+    return_data.emplace(std::begin(return_data), nd); // insert to front
   }
 
   return return_data;
 }
 
 
-std::vector<pair_data_t> EVGoScraper::ParseStation([[maybe_unused]] const pair_data_t& data, const std::string& input)
+std::vector<pair_data_t> EVGoScraper::ParseStation([[maybe_unused]] const pair_data_t& data, const std::string& input) const
 {
   std::vector<pair_data_t> return_data;
   auto response = response_parse(input);
 
-  for(shortjson::node_t& nodeL0 : response.toArray())
+  for(const shortjson::node_t& nodeL0 : response.toArray())
   {
     if(nodeL0.type != shortjson::Field::Object)
       throw __LINE__;
 
-    for(shortjson::node_t& nodeL1 : nodeL0.toObject())
+    for(const shortjson::node_t& nodeL1 : nodeL0.toObject())
     {
       if(nodeL1.identifier == "@class")
       {
@@ -242,7 +258,7 @@ std::vector<pair_data_t> EVGoScraper::ParseStation([[maybe_unused]] const pair_d
         pair_data_t nd;
         {
           nd.query.parser = Parser::BuildQuery | Parser::Port;
-          nd.query.node_id = safe_int<__LINE__>(nodeL1);
+          nd.query.node_id = safe_string<__LINE__>(nodeL1);
         }
         return_data.emplace_back(nd);
       }
@@ -252,7 +268,7 @@ std::vector<pair_data_t> EVGoScraper::ParseStation([[maybe_unused]] const pair_d
   return return_data;
 }
 
-std::vector<pair_data_t> EVGoScraper::ParsePort(const pair_data_t& data, const std::string& input)
+std::vector<pair_data_t> EVGoScraper::ParsePort(const pair_data_t& data, const std::string& input) const
 {
   pair_data_t nd;
   auto response = response_parse(input);
@@ -262,7 +278,7 @@ std::vector<pair_data_t> EVGoScraper::ParsePort(const pair_data_t& data, const s
 
   std::optional<std::string> port_name;
   bool credit_card_ok = false;
-  for(shortjson::node_t& nodeL0 : response.toObject())
+  for(const shortjson::node_t& nodeL0 : response.toObject())
   {
     if(nodeL0.identifier == "@class")
     {
@@ -271,7 +287,7 @@ std::vector<pair_data_t> EVGoScraper::ParsePort(const pair_data_t& data, const s
         throw __LINE__;
     }
     else if(nodeL0.identifier == "id")
-      nd.station.station_id = safe_int<__LINE__>(nodeL0);
+      nd.station.station_id = safe_string<__LINE__>(nodeL0);
     else if(nodeL0.identifier == "addressAddress1")
     {
       auto val = safe_string<__LINE__>(nodeL0);
@@ -342,15 +358,15 @@ std::vector<pair_data_t> EVGoScraper::ParsePort(const pair_data_t& data, const s
       port_name = safe_string<__LINE__>(nodeL0);
     else if(nodeL0.identifier == "stationSockets")
     {
-      for(shortjson::node_t& nodeL1 : nodeL0.toArray())
+      for(const shortjson::node_t& nodeL1 : nodeL0.toArray())
       {
         port_t port;
         if(credit_card_ok)
           port.price.payment |= Payment::Credit;
-        for(shortjson::node_t& nodeL2 : nodeL1.toObject())
+        for(const shortjson::node_t& nodeL2 : nodeL1.toObject())
         {
           if(nodeL2.identifier == "id")
-            port.port_id = safe_int<__LINE__>(nodeL2);
+            port.port_id = safe_string<__LINE__>(nodeL2);
           else if(nodeL2.identifier == "stationModelSocketSocketTypeId")
           {
             auto val = safe_string<__LINE__>(nodeL2);
@@ -387,7 +403,7 @@ std::vector<pair_data_t> EVGoScraper::ParsePort(const pair_data_t& data, const s
           else if(nodeL2.identifier == "socketPrices")
           {
             assert(nodeL2.toArray().size() == 1);
-            for(shortjson::node_t& nodeL3 : nodeL2.toArray().front().toObject())
+            for(const shortjson::node_t& nodeL3 : nodeL2.toArray().front().toObject())
             {
               if(nodeL3.identifier == "currency")
               {
@@ -401,7 +417,7 @@ std::vector<pair_data_t> EVGoScraper::ParsePort(const pair_data_t& data, const s
               {
                 if(auto val = safe_float64<__LINE__>(nodeL3); val)
                 {
-                  port.price.unit = Unit::Kilowatts;
+                  port.price.unit = Unit::KilowattHours;
                   port.price.per_unit = val;
                 }
               }
@@ -427,10 +443,10 @@ std::vector<pair_data_t> EVGoScraper::ParsePort(const pair_data_t& data, const s
     {
       if(nodeL0.type == shortjson::Field::Array)
       {
-        for(shortjson::node_t& nodeL1 : nodeL0.toArray())
+        for(const shortjson::node_t& nodeL1 : nodeL0.toArray())
         {
           int day_of_week = -1;
-          for(shortjson::node_t& nodeL2 : nodeL1.toObject())
+          for(const shortjson::node_t& nodeL2 : nodeL1.toObject())
           {
             if(nodeL2.identifier == "dayOfWeekId")
             {

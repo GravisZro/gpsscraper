@@ -179,3 +179,131 @@ void station_t::incorporate(const station_t& o)
   ports.sort();
   ports.erase(std::unique(std::begin(ports), std::end(ports)), std::end(ports));
 }
+
+
+std::ostream & operator << (std::ostream &out, const Payment value) noexcept
+{
+  if(value == Payment::Undefined)
+    out << "null";
+  else
+  {
+    auto v = static_cast<typename std::underlying_type_t<const Payment>>(value);
+    if(v & static_cast<typename std::underlying_type_t<Payment>>(Payment::Free))
+      out << "Free ";
+    if(v & static_cast<typename std::underlying_type_t<Payment>>(Payment::Cheque))
+      out << "Cheque ";
+    if(v & static_cast<typename std::underlying_type_t<Payment>>(Payment::Credit))
+      out << "Credit ";
+    if(v & static_cast<typename std::underlying_type_t<Payment>>(Payment::RFID))
+      out << "RFID ";
+    if(v & static_cast<typename std::underlying_type_t<Payment>>(Payment::API))
+      out << "API ";
+    if(v & static_cast<typename std::underlying_type_t<Payment>>(Payment::Website))
+      out << "Website ";
+    if(v & static_cast<typename std::underlying_type_t<Payment>>(Payment::PhoneCall))
+      out << "PhoneCall ";
+  }
+  return out;
+}
+
+std::ostream & operator << (std::ostream &out, const Unit value) noexcept
+{
+  switch(value)
+  {
+    case Unit::KilowattHours: out << "KilowattHours";
+    case Unit::WattHours: out << "WattHours";
+    case Unit::Minutes: out << "Minutes";
+    case Unit::Hours: out << "Hours";
+  }
+  return out;
+}
+
+std::ostream & operator << (std::ostream &out, const Currency value) noexcept
+{
+  switch(value)
+  {
+    case Currency::USD: out << "USD";
+    case Currency::CND: out << "CND";
+    case Currency::Euro: out << "Euro";
+    case Currency::Pound: out << "Pound";
+  }
+  return out;
+}
+
+std::ostream & operator << (std::ostream &out, const Connector value) noexcept
+{
+  if(value == Connector::Unknown)
+    out << "null";
+  else
+  {
+    auto v = static_cast<typename std::underlying_type_t<const Connector>>(value);
+    if(v & static_cast<typename std::underlying_type_t<Connector>>(Connector::Nema515))
+      out << "Nema515 ";
+    if(v & static_cast<typename std::underlying_type_t<Connector>>(Connector::Nema520))
+      out << "Nema520 ";
+    if(v & static_cast<typename std::underlying_type_t<Connector>>(Connector::Nema1450))
+      out << "Nema1450 ";
+    if(v & static_cast<typename std::underlying_type_t<Connector>>(Connector::CHAdeMO))
+      out << "CHAdeMO ";
+    if(v & static_cast<typename std::underlying_type_t<Connector>>(Connector::J1772))
+      out << "J1772 ";
+    if(v & static_cast<typename std::underlying_type_t<Connector>>(Connector::CCS1))
+      out << "CCS1 ";
+    if(v & static_cast<typename std::underlying_type_t<Connector>>(Connector::CCS2))
+      out << "CCS2 ";
+    if(v & static_cast<typename std::underlying_type_t<Connector>>(Connector::Tesla))
+      out << "Tesla ";
+  }
+  return out;
+}
+
+
+std::ostream & operator << (std::ostream &out, const contact_t& value) noexcept
+{
+  if(!value)
+    out << "Contact: null" << std::endl;
+  else
+    out << "Contact:" << std::endl
+        << "contact_id:    " << value.contact_id << std::endl
+        << "street_number: " << value.street_number << std::endl
+        << "street_name:   " << value.street_name << std::endl
+        << "city:          " << value.city << std::endl
+        << "state:         " << value.state << std::endl
+        << "country:       " << value.country << std::endl
+        << "postal_code:   " << value.postal_code << std::endl
+        << "phone_number:  " << value.phone_number << std::endl
+        << "URL:           " << value.URL << std::endl;
+  return out;
+}
+
+std::ostream & operator << (std::ostream &out, const price_t& value) noexcept
+{
+  if(!value)
+    out << "Price: null" << std::endl;
+  else
+    out << "Price:" << std::endl
+        << "price_id: " << value.price_id << std::endl
+        << "text:     " << value.text << std::endl
+        << "payment:  " << value.payment << std::endl
+        << "currency: " << value.currency << std::endl
+        << "minimum:  " << value.minimum << std::endl
+        << "initial:  " << value.initial << std::endl
+        << "unit:     " << value.unit << std::endl
+        << "per_unit: " << value.per_unit << std::endl;
+  return out;
+}
+
+std::ostream & operator << (std::ostream &out, const power_t& value) noexcept
+{
+  if(!value)
+    out << "Power: null" << std::endl;
+  else
+    out << "Power:" << std::endl
+        << "power_id:   " << value.power_id << std::endl
+        << "level:      " << value.level << std::endl
+        << "connector:  " << value.connector << std::endl
+        << "amp:        " << value.amp << std::endl
+        << "kw:         " << value.kw << std::endl
+        << "volt:       " << value.volt << std::endl;
+  return out;
+}

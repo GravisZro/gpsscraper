@@ -22,7 +22,7 @@ std::string decompress(const std::string& input)
 }
 
 
-pair_data_t ElectrifyAmericaScraper::BuildQuery(const pair_data_t& input)
+pair_data_t ElectrifyAmericaScraper::BuildQuery(const pair_data_t& input) const
 {
   pair_data_t data = input;
   data.station.network_id = Network::Electrify_America;
@@ -40,13 +40,13 @@ pair_data_t ElectrifyAmericaScraper::BuildQuery(const pair_data_t& input)
     case Parser::BuildQuery | Parser::Station:
       assert(data.query.node_id);
       data.query.parser = Parser::Station;
-      data.query.URL = "https://api-prod.electrifyamerica.com/v2/locations/" + std::to_string(*data.query.node_id);
+      data.query.URL = "https://api-prod.electrifyamerica.com/v2/locations/" + *data.query.node_id;
       break;
   }
   return data;
 }
 
-std::vector<pair_data_t> ElectrifyAmericaScraper::Parse(const pair_data_t& data, const std::string& input)
+std::vector<pair_data_t> ElectrifyAmericaScraper::Parse(const pair_data_t& data, const std::string& input) const
 {
   try
   {
@@ -70,7 +70,7 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::Parse(const pair_data_t& data,
   return {};
 }
 
-std::vector<pair_data_t> ElectrifyAmericaScraper::ParseMapArea([[maybe_unused]] const pair_data_t& data, const std::string& input)
+std::vector<pair_data_t> ElectrifyAmericaScraper::ParseMapArea([[maybe_unused]] const pair_data_t& data, const std::string& input) const
 {
   auto input_str = decompress(input);
   std::vector<pair_data_t> return_data;
@@ -79,7 +79,7 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseMapArea([[maybe_unused]] 
   if(root.type != shortjson::Field::Array)
     throw __LINE__;
 
-  for(shortjson::node_t& nodeL0 : root.toArray())
+  for(const shortjson::node_t& nodeL0 : root.toArray())
   {
     if(nodeL0.type != shortjson::Field::Object)
       throw __LINE__;
@@ -87,11 +87,9 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseMapArea([[maybe_unused]] 
     ext::string siteId;
     if(shortjson::FindString(nodeL0, siteId, "siteId"))
     {
-      if(!siteId.is_number())
-        throw __LINE__;
       pair_data_t nd;
       nd.query.parser = Parser::BuildQuery | Parser::Station;
-      nd.query.node_id = ext::from_string<uint64_t>(siteId);
+      nd.query.node_id = siteId;
       return_data.emplace_back(nd);
     }
   }
@@ -99,7 +97,7 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseMapArea([[maybe_unused]] 
   return return_data;
 }
 
-std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t& data, const std::string& input)
+std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t& data, const std::string& input) const
 {
   shortjson::node_t root = shortjson::Parse(input);
 
@@ -112,17 +110,10 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t
   nd.station.network_id = data.station.network_id;
   nd.station.access_public = true;
 
-  for(shortjson::node_t& nodeL0 : root.toObject())
+  for(const shortjson::node_t& nodeL0 : root.toObject())
   {
     if(nodeL0.identifier == "siteId")
-    {
-      if(nodeL0.type != shortjson::Field::String)
-        throw __LINE__;
-      ext::string val = nodeL0.toString();
-      if(!val.is_number())
-        throw __LINE__;
-      nd.station.station_id = ext::from_string<uint64_t>(val);
-    }
+      nd.station.station_id = safe_string<__LINE__>(nodeL0);
     else if(nodeL0.identifier == "name")
       nd.station.name = safe_string<__LINE__>(nodeL0);
     else if(nodeL0.identifier == "address")
@@ -153,7 +144,7 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t
     {
       if(nodeL0.type != shortjson::Field::Object)
         throw __LINE__;
-      for(shortjson::node_t& nodeL1 : nodeL0.toObject())
+      for(const shortjson::node_t& nodeL1 : nodeL0.toObject())
       {
         if(nodeL1.identifier == "latitude")
           nd.station.location.latitude = safe_float64<__LINE__>(nodeL1);
@@ -190,13 +181,13 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t
       if(nodeL0.type != shortjson::Field::Object)
         throw __LINE__;
 
-      for(shortjson::node_t& nodeL1 : nodeL0.toObject())
+      for(const shortjson::node_t& nodeL1 : nodeL0.toObject())
       {
         if(nodeL1.identifier == "regularHours")
         {
           if(nodeL1.type != shortjson::Field::Array)
             throw __LINE__;
-          for([[maybe_unused]] shortjson::node_t& nodeL2 : nodeL1.toArray())
+          for([[maybe_unused]] const shortjson::node_t& nodeL2 : nodeL1.toArray())
           {
             throw __LINE__; // never seen
           }
@@ -207,13 +198,13 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t
     {
       if(nodeL0.type != shortjson::Field::Array)
         throw __LINE__;
-      for(shortjson::node_t& nodeL1 : nodeL0.toArray())
+      for(const shortjson::node_t& nodeL1 : nodeL0.toArray())
       {
         if(nodeL1.type != shortjson::Field::Object)
           throw __LINE__;
         price_t price;
         price.currency = Currency::USD;
-        for(shortjson::node_t& nodeL2 : nodeL1.toObject())
+        for(const shortjson::node_t& nodeL2 : nodeL1.toObject())
         {
           if(nodeL2.identifier == "time")
           {
@@ -222,7 +213,7 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t
           }
           else if(nodeL2.identifier == "energy")
           {
-            price.unit = Unit::Kilowatts;
+            price.unit = Unit::KilowattHours;
             price.per_unit = safe_float64<__LINE__>(nodeL2);
           }
 
@@ -246,42 +237,24 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t
     {
       if(nodeL0.type != shortjson::Field::Array)
         throw __LINE__;
-      for(shortjson::node_t& nodeL1 : nodeL0.toArray())
+      for(const shortjson::node_t& nodeL1 : nodeL0.toArray())
       {
         if(nodeL1.type != shortjson::Field::Object)
           throw __LINE__;
         port_t port;
-        for(shortjson::node_t& nodeL2 : nodeL1.toObject())
+        for(const shortjson::node_t& nodeL2 : nodeL1.toObject())
         {
           if(nodeL2.identifier == "id")
-          {
-            if(nodeL2.type != shortjson::Field::String)
-              throw __LINE__;
-            if(!nd.station.station_id)
-              throw __LINE__;
-            ext::string val = nodeL2.toString();
-            val.erase("EOL "); // End of Life?
-            val.erase(std::to_string(*nd.station.station_id) + '-');
-            uint64_t modifier = 0;
-
-            if(val.erase("BT-") != std::string::npos)
-              modifier += 100 ;
-            if(val.erase("G4-") != std::string::npos)
-              modifier += 200;
-            if(!val.is_number())
-              throw __LINE__;
-            port.port_id = ext::from_string<uint64_t>(val) + modifier +
-                           (*nd.station.station_id * 1000);
-          }
+            port.port_id = safe_string<__LINE__>(nodeL2);
           else if(nodeL2.identifier == "connectors")
           {
             if(nodeL2.type != shortjson::Field::Array)
               throw __LINE__;
-            for(shortjson::node_t& nodeL3 : nodeL2.toArray())
+            for(const shortjson::node_t& nodeL3 : nodeL2.toArray())
             {
               if(nodeL3.type != shortjson::Field::Object)
                 throw __LINE__;
-              for(shortjson::node_t& nodeL4 : nodeL3.toObject())
+              for(const shortjson::node_t& nodeL4 : nodeL3.toObject())
               {
                 if(nodeL4.identifier == "standard")
                 {

@@ -27,7 +27,7 @@ public:
 
   //void updateMapLocation(const pair_data_t& data);
 
-  std::optional<uint64_t> identifyMapLocation(const pair_data_t& data);
+  std::optional<std::string> identifyMapLocation(const pair_data_t& data);
   std::optional<uint64_t> identifyURL(const std::optional<std::string>& URL);
   std::optional<uint64_t> identifyContact(const contact_t& contact);
   std::optional<uint64_t> identifyPrice(const price_t& price);
@@ -36,20 +36,21 @@ public:
   std::optional<uint64_t> identifySchedule(const schedule_t& schedule);
 
   std::list<pair_data_t> getMapLocationCache(const pair_data_t& data);
+  std::list<pair_data_t> getMapLocation(const pair_data_t& data);
   std::optional<std::string> getURL(const std::optional<uint64_t> URL_id);
   contact_t getContact(const std::optional<uint64_t> contact_id);
   price_t getPrice(const std::optional<uint64_t> price_id);
   power_t getPower(const std::optional<uint64_t> power_id);
   std::optional<schedule_t::hours_t> getHours(const std::optional<uint64_t> hours_id);
   schedule_t getSchedule(const std::optional<uint64_t> schedule_id);
-  port_t getPort(Network network_id, uint64_t port_id);
+  port_t getPort(Network network_id, const std::string& port_id);
   station_t getStation(uint64_t contact_id);
-  station_t getStation(Network network_id, uint64_t station_id);
+  station_t getStation(Network network_id, const std::string& station_id);
   station_t getStation(double latitude, double longitude);
 
 private:
   std::list<query_info_t> getChildLocations(Network network_id, query_info_t qinfo);
-  std::list<query_info_t> recurseChildLocations(Network network_id, query_info_t qinfo, std::set<uint64_t>& node_ids);
+  std::list<query_info_t> recurseChildLocations(Network network_id, query_info_t qinfo, std::set<std::string>& node_ids);
   station_t getStation(sql::query&& q);
   sql::db m_db;
 };

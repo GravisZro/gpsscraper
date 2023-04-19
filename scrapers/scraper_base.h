@@ -16,8 +16,9 @@ class ScraperBase
 public:
   virtual ~ScraperBase(void) = default;
 
-  virtual pair_data_t BuildQuery(const pair_data_t& input) = 0;
-  virtual std::vector<pair_data_t> Parse(const pair_data_t& data, const std::string& input) = 0;
+  virtual void classify(pair_data_t& record) const = 0;
+  virtual pair_data_t BuildQuery(const pair_data_t& input) const = 0;
+  virtual std::vector<pair_data_t> Parse(const pair_data_t& data, const std::string& input) const = 0;
 };
 
 #endif // SCRAPER_BASE_H

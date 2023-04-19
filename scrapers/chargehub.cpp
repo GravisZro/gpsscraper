@@ -11,14 +11,12 @@
 #include <shortjson/shortjson.h>
 #include "utilities.h"
 
-ChargehubScraper::ChargehubScraper(double starting_latitude,
-                                   double stopping_latitude) noexcept
-  : m_start_latitude(starting_latitude),
-    m_end_latitude(stopping_latitude)
+void ChargehubScraper::classify(pair_data_t& record) const
 {
+  record.query.parser = Parser::BuildQuery | Parser::Station;
 }
 
-pair_data_t ChargehubScraper::BuildQuery(const pair_data_t& input)
+pair_data_t ChargehubScraper::BuildQuery(const pair_data_t& input) const
 {
   pair_data_t data;
   switch(input.query.parser)
@@ -27,10 +25,10 @@ pair_data_t ChargehubScraper::BuildQuery(const pair_data_t& input)
 
     case Parser::BuildQuery | Parser::Initial:
       data.query.parser = Parser::Initial;
+      data.query.bounds = { { 12.5, 55.0 }, { 90.0, -90.0 } };
       break;
 
     case Parser::BuildQuery | Parser::MapArea:
-    {
       data.query.parser = Parser::MapArea;
       data.query.URL= "https://apiv2.chargehub.com/api/locationsmap"
                       "?latmin=" + std::to_string(input.query.bounds.latitude.min) +
@@ -41,25 +39,25 @@ pair_data_t ChargehubScraper::BuildQuery(const pair_data_t& input)
       data.query.header_fields = { { "Content-Type", "application/json" }, };
       data.query.bounds = input.query.bounds;
       break;
-    }
+
     case Parser::BuildQuery | Parser::Station:
       data.query.parser = Parser::Station;
       if(!input.station.station_id)
         throw __LINE__;
-      data.query.URL = "https://apiv2.chargehub.com/api/stations/details?language=en&station_id=" + std::to_string(*input.station.station_id);
+      data.query.URL = "https://apiv2.chargehub.com/api/stations/details?language=en&station_id=" + *input.station.station_id;
       break;
   }
   return data;
 }
 
-std::vector<pair_data_t> ChargehubScraper::Parse(const pair_data_t& data, const std::string& input)
+std::vector<pair_data_t> ChargehubScraper::Parse(const pair_data_t& data, const std::string& input) const
 {
   try
   {
     switch(data.query.parser)
     {
       default: throw std::string(__FILE__).append(": unknown parser: ").append(std::to_string(int(data.query.parser)));
-      case Parser::Initial: return ParserInit();
+      case Parser::Initial: return ParserInit(data);
       case Parser::MapArea: return ParseMapArea(input);
       case Parser::Station: return ParseStation(data, input);
     }
@@ -77,22 +75,27 @@ std::vector<pair_data_t> ChargehubScraper::Parse(const pair_data_t& data, const 
   return std::vector<pair_data_t>();
 }
 
-std::vector<pair_data_t> ChargehubScraper::ParserInit(void)
+std::vector<pair_data_t> ChargehubScraper::ParserInit(const pair_data_t& data) const
 {
   std::vector<pair_data_t> return_data;
-  query_info_t query;
-  query.parser = Parser::BuildQuery | Parser::MapArea;
-  for(double latitude = m_start_latitude;
-      latitude < m_end_latitude;
-      latitude += m_latitude_step)
+  pair_data_t nd;
+
+  nd.query.parser = Parser::BuildQuery | Parser::MapArea;
+  nd.query.bounds.longitude = data.query.bounds.longitude;
+  nd.station.network_id = Network::ChargeHub;
+
+  constexpr double latitude_step = 0.25;
+  for(double latitude = data.query.bounds.latitude.min;
+      latitude < data.query.bounds.latitude.max;
+      latitude += latitude_step)
   {
-    query.bounds = { { latitude + m_latitude_step , latitude }, { 90.0, -90.0 } };
-    return_data.emplace_back(BuildQuery({ query, {}}));
+    nd.query.bounds.latitude = { latitude + latitude_step, latitude };
+    return_data.emplace_back(BuildQuery(nd));
   }
   return return_data;
 }
 
-std::vector<pair_data_t> ChargehubScraper::ParseMapArea(const std::string &input)
+std::vector<pair_data_t> ChargehubScraper::ParseMapArea(const std::string &input) const
 {
   std::vector<pair_data_t> return_data;
   shortjson::node_t root = shortjson::Parse(input);
@@ -101,7 +104,7 @@ std::vector<pair_data_t> ChargehubScraper::ParseMapArea(const std::string &input
      root.type != shortjson::Field::Array)
     throw __LINE__;
 
-  for(shortjson::node_t& nodeL0 : root.toArray())
+  for(const shortjson::node_t& nodeL0 : root.toArray())
   {
     if(nodeL0.type == shortjson::Field::Undefined)
       break;
@@ -119,21 +122,11 @@ std::vector<pair_data_t> ChargehubScraper::ParseMapArea(const std::string &input
 
     pair_data_t nd;
     nd.query.parser = Parser::BuildQuery | Parser::Station;
-    nd.station.station_id = nodeL1.toNumber();
+    nd.station.station_id = safe_string<__LINE__>(nodeL1);
     return_data.emplace_back(BuildQuery(nd));
   }
   return return_data;
 }
-
-/*
-inline std::optional<std::string> validate_string(const std::string& str)
-{
-  auto pos = std::find_if_not(std::begin(str), std::end(str),
-                 [](unsigned char c){ return std::isspace(c); });
-  return pos == std::end(str) ? std::optional<std::string>() : str;
-}
-*/
-
 
 inline void connector_from_string(const std::optional<std::string>& str, port_t& port)
 {
@@ -218,7 +211,7 @@ Payment get_payment_methods(std::optional<std::string> str)
   return rv;
 }
 
-std::vector<pair_data_t> ChargehubScraper::ParseStation(const pair_data_t& data, const std::string& input)
+std::vector<pair_data_t> ChargehubScraper::ParseStation(const pair_data_t& data, const std::string& input) const
 {
   std::vector<pair_data_t> return_data;
   shortjson::node_t root = shortjson::Parse(input);
@@ -227,7 +220,7 @@ std::vector<pair_data_t> ChargehubScraper::ParseStation(const pair_data_t& data,
      root.type != shortjson::Field::Array)
     throw __LINE__;
 
-  for(shortjson::node_t& nodeL0 : root.toArray())
+  for(const shortjson::node_t& nodeL0 : root.toArray())
   {
     if(nodeL0.type != shortjson::Field::Array &&
        nodeL0.type != shortjson::Field::Object)
@@ -236,14 +229,11 @@ std::vector<pair_data_t> ChargehubScraper::ParseStation(const pair_data_t& data,
     pair_data_t nd = data;
     nd.query.parser = Parser::Complete;
 
-    for(shortjson::node_t& nodeL1 : nodeL0.toObject())
+    for(const shortjson::node_t& nodeL1 : nodeL0.toObject())
     {
 
       if(nodeL1.identifier == "Id")
-      {
-        if(nd.station.station_id != safe_int<__LINE__>(nodeL1))
-          throw __LINE__;
-      }
+        nd.station.station_id = safe_string<__LINE__>(nodeL1);
       else if(nodeL1.identifier == "LocName")
         nd.station.name = safe_string<__LINE__>(nodeL1);
       else if(nodeL1.identifier == "LocDesc")
@@ -338,12 +328,11 @@ std::vector<pair_data_t> ChargehubScraper::ParseStation(const pair_data_t& data,
           for(auto& portsL1 : portsL0.toArray())
           {
             port_t thisport = port;
-            for(shortjson::node_t& portsL2 : portsL1.toArray())
+            for(const shortjson::node_t& portsL2 : portsL1.toArray())
             {
-              if(portsL2.identifier == "portId")
-                thisport.port_id = safe_int<__LINE__>(portsL2);
-              else if(portsL2.identifier == "netPortId")
-                thisport.port_id = safe_int<__LINE__>(portsL2);
+              if(portsL2.identifier == "portId" ||
+                 portsL2.identifier == "netPortId")
+                thisport.port_id = safe_string<__LINE__>(portsL2);
               else if(portsL2.identifier == "displayName")
                 thisport.display_name = safe_string<__LINE__>(portsL2);
             }
