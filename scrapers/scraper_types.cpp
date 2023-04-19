@@ -210,10 +210,10 @@ std::ostream & operator << (std::ostream &out, const Unit value) noexcept
 {
   switch(value)
   {
-    case Unit::KilowattHours: out << "KilowattHours";
-    case Unit::WattHours: out << "WattHours";
-    case Unit::Minutes: out << "Minutes";
-    case Unit::Hours: out << "Hours";
+    case Unit::KilowattHours: out << "KilowattHours"; break;
+    case Unit::WattHours: out << "WattHours"; break;
+    case Unit::Minutes: out << "Minutes"; break;
+    case Unit::Hours: out << "Hours"; break;
   }
   return out;
 }
@@ -222,10 +222,10 @@ std::ostream & operator << (std::ostream &out, const Currency value) noexcept
 {
   switch(value)
   {
-    case Currency::USD: out << "USD";
-    case Currency::CND: out << "CND";
-    case Currency::Euro: out << "Euro";
-    case Currency::Pound: out << "Pound";
+    case Currency::USD: out << "USD"; break;
+    case Currency::CND: out << "CND"; break;
+    case Currency::Euro: out << "Euro"; break;
+    case Currency::Pound: out << "Pound"; break;
   }
   return out;
 }
