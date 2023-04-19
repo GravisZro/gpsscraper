@@ -67,23 +67,47 @@ pair_data_t EVGoScraper::BuildQuery(const pair_data_t& input) const
       return BuildQuery(data);
 
     case Parser::BuildQuery | Parser::MapArea:
+    {
       data.query.parser = Parser::MapArea;
       data.query.URL = "https://account.evgo.com/stationFacade/findSitesInBounds";
-      data.query.post_data = "{\"filterByIsManaged\":true,\"filterByBounds\":"
-                             "{\"northEastLat\":" + std::to_string(data.query.bounds.northEast().latitude) +
-                             ",\"northEastLng\":" + std::to_string(data.query.bounds.northEast().longitude) +
-                             ",\"southWestLat\":" + std::to_string(data.query.bounds.southWest().latitude) +
-                             ",\"southWestLng\":" + std::to_string(data.query.bounds.southWest().longitude) +
-                             "}}";
+      ext::string post_data =
+          R"(
+          {
+            "filterByIsManaged": true,
+            "filterByBounds":
+            {
+              "northEastLat": %1,
+              "northEastLng": %2,
+              "southWestLat": %3,
+              "southWestLng": %4
+            }
+          })";
+      post_data.erase(std::set<char>{'\n',' '});
+      post_data.replace("%1", std::to_string(input.query.bounds.northEast().latitude));
+      post_data.replace("%2", std::to_string(input.query.bounds.northEast().longitude));
+      post_data.replace("%3", std::to_string(input.query.bounds.southWest().latitude));
+      post_data.replace("%4", std::to_string(input.query.bounds.southWest().longitude));
+      data.query.post_data = post_data;
       data.query.header_fields = { { "Content-Type", "application/json" } };
       break;
+    }
 
     case Parser::BuildQuery | Parser::Station:
+    {
       data.query.parser = Parser::Station;
       data.query.URL = "https://account.evgo.com/stationFacade/findStationsBySiteId";
-      data.query.post_data = "{\"filterByIsManaged\":true,\"filterBySiteId\":" +  *data.query.node_id +"}";
+      ext::string post_data =
+          R"(
+          {
+            "filterByIsManaged": true,
+            "filterBySiteId": %1
+          })";
+      post_data.erase(std::set<char>{'\n',' '});
+      post_data.replace("%1", *data.query.node_id);
+      data.query.post_data = post_data;
       data.query.header_fields = { { "Content-Type", "application/json" } };
       break;
+    }
 
     case Parser::BuildQuery | Parser::Port:
       data.query.parser = Parser::Port;
@@ -187,11 +211,7 @@ std::vector<pair_data_t> EVGoScraper::ParseMapArea(const pair_data_t& data, cons
       else if(nodeL1.identifier == "q")
         quantity = safe_int<__LINE__>(nodeL1);
       else if(nodeL1.identifier == "id")
-      {
-        if(nodeL1.type != shortjson::Field::String)
-          throw __LINE__;
-        id = nodeL1.toString();
-      }
+        id = safe_string<__LINE__>(nodeL1); // tolerant conversion to string
       else if(nodeL1.identifier == "latitude")
         latitude = safe_float64<__LINE__>(nodeL1);
       else if(nodeL1.identifier == "longitude")
