@@ -1,6 +1,6 @@
 TEMPLATE = app
 CONFIG += console
-CONFIG += c++20
+CONFIG += c++2a
 CONFIG += strict_c++
 #CONFIG += exceptions_off
 CONFIG += rtti_off
