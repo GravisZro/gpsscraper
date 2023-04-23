@@ -110,58 +110,30 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t
   nd.station.network_id = data.station.network_id;
   nd.station.access_public = true;
 
+  std::optional<std::string> val;
+
   for(const shortjson::node_t& nodeL0 : root.toObject())
   {
-    if(nodeL0.identifier == "siteId")
-      nd.station.station_id = safe_string<__LINE__>(nodeL0);
-    else if(nodeL0.identifier == "name")
-      nd.station.name = safe_string<__LINE__>(nodeL0);
-    else if(nodeL0.identifier == "address")
+    val.reset();
+    if(parse_string_node<__LINE__>(nodeL0, "siteId", nd.station.station_id) ||
+       parse_string_node<__LINE__>(nodeL0, "name", nd.station.name) ||
+       parse_street_node<__LINE__>(nodeL0, "address", nd.station.contact.street_number, nd.station.contact.street_name) ||
+       parse_string_node<__LINE__>(nodeL0, "city", nd.station.contact.city) ||
+       parse_string_node<__LINE__>(nodeL0, "state", nd.station.contact.state) ||
+       parse_string_node<__LINE__>(nodeL0, "country", nd.station.contact.country) ||
+       parse_string_node<__LINE__>(nodeL0, "postalCode", nd.station.contact.postal_code) ||
+       parse_coords_node<__LINE__>(nodeL0, "coordinates", "latitude", "longitude", nd.station.location) ||
+       parse_string_node<__LINE__>(nodeL0, "description", nd.station.description) ||
+       false)
     {
-      auto val = safe_string<__LINE__>(nodeL0);
-      try
-      {
-        auto pos = std::find_if(std::begin(*val), std::end(*val),
-                       [](unsigned char c){ return std::isspace(c); });
-        nd.station.contact.street_number = ext::from_string<int32_t>(std::string(std::begin(*val), pos));
-        pos = std::next(pos);
-        nd.station.contact.street_name = std::string(pos, std::end(*val));
-      }
-      catch(...)
-      {
-        nd.station.contact.street_name = *val;
-      }
     }
-    else if(nodeL0.identifier == "city")
-      nd.station.contact.city = safe_string<__LINE__>(nodeL0);
-    else if(nodeL0.identifier == "state")
-      nd.station.contact.state = safe_string<__LINE__>(nodeL0);
-    else if(nodeL0.identifier == "country")
-      nd.station.contact.country = safe_string<__LINE__>(nodeL0);
-    else if(nodeL0.identifier == "postalCode")
-      nd.station.contact.postal_code = safe_string<__LINE__>(nodeL0);
-    else if(nodeL0.identifier == "coordinates")
+    else if(parse_string_node<__LINE__>(nodeL0, "type", val))
     {
-      if(nodeL0.type != shortjson::Field::Object)
-        throw __LINE__;
-      for(const shortjson::node_t& nodeL1 : nodeL0.toObject())
-      {
-        if(nodeL1.identifier == "latitude")
-          nd.station.location.latitude = safe_float64<__LINE__>(nodeL1);
-        else if(nodeL1.identifier == "longitude")
-          nd.station.location.longitude = safe_float64<__LINE__>(nodeL1);
-      }
-    }
-    else if(nodeL0.identifier == "type")
-    {
-      if(nodeL0.type != shortjson::Field::String)
-        throw __LINE__;
-      if(nodeL0.toString() == "PUBLIC" ||
-         nodeL0.toString() == "COMMERCIAL")
+      if(val == "PUBLIC")
         nd.station.access_public = true;
-      else if(nodeL0.toString() == "PRIVATE")
+      else if(val == "COMMERCIAL")
         nd.station.access_public = false;
-      else if (nodeL0.toString() == "COMING_SOON")
+      else if (val == "COMING_SOON")
       {
         nd.query.parser = Parser::Discard;
         break; // exit loop
@@ -169,24 +141,18 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t
       else
         throw __LINE__;
     }
-    else if(nodeL0.identifier == "description")
-      nd.station.description = safe_string<__LINE__>(nodeL0);
     else if(nodeL0.identifier == "restricted")
     {
       auto val = safe_bool<__LINE__>(nodeL0);
-      assert(val && !*val);
+      if(val && *val)
+        throw __LINE__; // never seen
     }
-    else if(nodeL0.identifier == "openingTimes")
+    else if(is_object_if_named<__LINE__>(nodeL0, "openingTimes"))
     {
-      if(nodeL0.type != shortjson::Field::Object)
-        throw __LINE__;
-
       for(const shortjson::node_t& nodeL1 : nodeL0.toObject())
       {
-        if(nodeL1.identifier == "regularHours")
+        if(is_array_if_named<__LINE__>(nodeL1, "regularHours"))
         {
-          if(nodeL1.type != shortjson::Field::Array)
-            throw __LINE__;
           for([[maybe_unused]] const shortjson::node_t& nodeL2 : nodeL1.toArray())
           {
             throw __LINE__; // never seen
@@ -194,10 +160,8 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t
         }
       }
     }
-    else if(nodeL0.identifier == "pricing")
+    else if(is_array_if_named<__LINE__>(nodeL0, "pricing"))
     {
-      if(nodeL0.type != shortjson::Field::Array)
-        throw __LINE__;
       for(const shortjson::node_t& nodeL1 : nodeL0.toArray())
       {
         if(nodeL1.type != shortjson::Field::Object)
@@ -206,20 +170,12 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t
         price.currency = Currency::USD;
         for(const shortjson::node_t& nodeL2 : nodeL1.toObject())
         {
-          if(nodeL2.identifier == "time")
-          {
+          if(parse_float_node<__LINE__>(nodeL2, "time", price.per_unit))
             price.unit = Unit::Minutes;
-            price.per_unit = safe_float64<__LINE__>(nodeL2);
-          }
-          else if(nodeL2.identifier == "energy")
-          {
+          else if(parse_float_node<__LINE__>(nodeL2, "energy", price.per_unit))
             price.unit = Unit::KilowattHours;
-            price.per_unit = safe_float64<__LINE__>(nodeL2);
-          }
-
-          else if(nodeL2.identifier == "maxPower")
+          else if(double val = 0.0; parse_float_node<__LINE__>(nodeL2, "maxPower", val))
           {
-            double val = safe_float64<__LINE__>(nodeL2);
             if(val > 7)
               price.payment = Payment::Credit | Payment::API;
             else
@@ -233,10 +189,8 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t
         }
       }
     }
-    else if(nodeL0.identifier == "evses")
+    else if(is_array_if_named<__LINE__>(nodeL0, "evses"))
     {
-      if(nodeL0.type != shortjson::Field::Array)
-        throw __LINE__;
       for(const shortjson::node_t& nodeL1 : nodeL0.toArray())
       {
         if(nodeL1.type != shortjson::Field::Object)
@@ -244,33 +198,35 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t
         port_t port;
         for(const shortjson::node_t& nodeL2 : nodeL1.toObject())
         {
-          if(nodeL2.identifier == "id")
-            port.port_id = safe_string<__LINE__>(nodeL2);
-          else if(nodeL2.identifier == "connectors")
+          if(parse_string_node<__LINE__>(nodeL2, "id", port.port_id))
           {
-            if(nodeL2.type != shortjson::Field::Array)
-              throw __LINE__;
+          }
+          else if(is_array_if_named<__LINE__>(nodeL2, "connectors"))
+          {
             for(const shortjson::node_t& nodeL3 : nodeL2.toArray())
             {
               if(nodeL3.type != shortjson::Field::Object)
                 throw __LINE__;
               for(const shortjson::node_t& nodeL4 : nodeL3.toObject())
               {
-                if(nodeL4.identifier == "standard")
+                val.reset();
+                if(parse_float_node<__LINE__>(nodeL4, "voltage", port.power.volt) ||
+                   parse_float_node<__LINE__>(nodeL4, "amperage", port.power.amp))
                 {
-                  if(nodeL4.type != shortjson::Field::String)
-                    throw __LINE__;
-                  if(nodeL4.toString() == "IEC_62196_T1_COMBO")
+                }
+                else if(parse_string_node<__LINE__>(nodeL4, "standard", val))
+                {
+                  if(val == "IEC_62196_T1_COMBO")
                   {
                     port.power.level = 3;
                     port.power.connector = Connector::CCS1;
                   }
-                  else if(nodeL4.toString() == "CHADEMO")
+                  else if(val == "CHADEMO")
                   {
                     port.power.level = 3;
                     port.power.connector = Connector::CHAdeMO;
                   }
-                  else if(nodeL4.toString() == "IEC_62196_T1")
+                  else if(val == "IEC_62196_T1")
                   {
                     port.power.level = 2;
                     port.power.connector = Connector::J1772;
@@ -278,10 +234,16 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t
                   else
                     throw __LINE__;
                 }
-                else if(nodeL4.identifier == "voltage")
-                  port.power.volt = safe_float64<__LINE__>(nodeL4);
-                else if(nodeL4.identifier == "amperage")
-                  port.power.amp = safe_float64<__LINE__>(nodeL4);
+                else if(parse_string_node<__LINE__>(nodeL4, "statue", val))
+                {
+                  if(val == "UNKNOWN"){}
+                  else if(val == "AVAILABLE")
+                    port.state = State::Operational;
+                  else if(val == "CHARGING")
+                    port.state = State::InUse;
+                  else
+                    throw __LINE__;
+                }
               }
             }
           }

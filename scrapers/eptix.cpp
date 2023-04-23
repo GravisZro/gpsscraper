@@ -88,7 +88,7 @@ std::vector<pair_data_t> EptixScraper::Parse(const pair_data_t& data, const std:
 
       pair_data_t parent;
       parent = data;
-      parent.query.parser = Parser::UpdateRecord | Parser::MapArea;
+      parent.query.parser = Parser::ReplaceRecord | Parser::MapArea;
       if(!child_ids.empty())
         parent.query.child_ids = child_ids;
       if(*data.query.node_id != "root")
@@ -158,9 +158,15 @@ pair_data_t EptixScraper::ParseStationNode(const pair_data_t& data, const shortj
   nd.query.bounds = data.query.bounds;
   nd.station.access_public = true; // public by default
 
+  std::optional<State> state;
+  std::optional<std::string> val;
+
   for(const shortjson::node_t& nodeL0 : root.toObject())
   {
-    if(nd.query.parser == Parser::Discard) // if not set
+    val.reset();
+    if(nodeL0.type == shortjson::Field::Null)
+      continue; // ignore field
+    else if(nd.query.parser == Parser::Discard) // if not set
     {
       if(nodeL0.identifier == "stationCount") // initial request
       {
@@ -184,35 +190,35 @@ pair_data_t EptixScraper::ParseStationNode(const pair_data_t& data, const shortj
          nd.station.access_public &&
          *nd.station.access_public)
       {
-        auto val = lower_case(*nd.station.name);
+        val = lower_case(*nd.station.name);
 
-        if(val.find("priv"  )   != std::string::npos || // private
-           val.find("only"  )   != std::string::npos || // general exclusion
-           val.find("exec"  )   != std::string::npos || // executive charger
-           val.find("dealer")   != std::string::npos || // car dealership
-           val.find(" staff")   != std::string::npos || // staff charger (space intentional)
-           val.find("employee") != std::string::npos || // employee charger
-           val.find("cosfleet")     != std::string::npos || // fleet chargers
-           val.find("bge fleet")    != std::string::npos ||
-           val.find("gsa fleet")    != std::string::npos ||
-           val.find("slco fleet")   != std::string::npos ||
-           val.find("xcel_fleet")   != std::string::npos ||
-           val.find("chem fleet")   != std::string::npos ||
-           val.find("osmp fleet")   != std::string::npos ||
-           val.find("county fleet") != std::string::npos)
+        if(val->find("priv"  )   != std::string::npos || // private
+           val->find("only"  )   != std::string::npos || // general exclusion
+           val->find("exec"  )   != std::string::npos || // executive charger
+           val->find("dealer")   != std::string::npos || // car dealership
+           val->find(" staff")   != std::string::npos || // staff charger (space intentional)
+           val->find("employee") != std::string::npos || // employee charger
+           val->find("cosfleet")     != std::string::npos || // fleet chargers
+           val->find("bge fleet")    != std::string::npos ||
+           val->find("gsa fleet")    != std::string::npos ||
+           val->find("slco fleet")   != std::string::npos ||
+           val->find("xcel_fleet")   != std::string::npos ||
+           val->find("chem fleet")   != std::string::npos ||
+           val->find("osmp fleet")   != std::string::npos ||
+           val->find("county fleet") != std::string::npos)
           nd.station.access_public = false;
-        else if(val.find("college") != std::string::npos ||
-                val.find("campus")  != std::string::npos) // college campus
+        else if(val->find("college") != std::string::npos ||
+                val->find("campus")  != std::string::npos) // college campus
         {
           nd.station.access_public = false;
           optional_append(nd.station.restrictions, "students and staff only");
         }
-        else if(val.find("apartment") != std::string::npos)
+        else if(val->find("apartment") != std::string::npos)
         {
           nd.station.access_public.reset();
           optional_append(nd.station.restrictions, "likely private");
         }
-        else if(val.find("garage") != std::string::npos)
+        else if(val->find("garage") != std::string::npos)
         {
           nd.station.access_public.reset();
           optional_append(nd.station.restrictions, "likely paid parking");
@@ -228,55 +234,50 @@ pair_data_t EptixScraper::ParseStationNode(const pair_data_t& data, const shortj
         nd.station.access_public = false;
       }
     }
-    else if(nodeL0.identifier == "websiteUrl")
-      nd.station.contact.URL = safe_string<__LINE__>(nodeL0);
-    else if(nodeL0.identifier == "stats")
+    else if(parse_string_node<__LINE__>(nodeL0, "websiteUrl", nd.station.contact.URL))
     {
-      int last365 = -1, last30 = -1;
-      if(nodeL0.type != shortjson::Field::Object)
-        throw __LINE__;
+    }
+    else if(is_object_if_named<__LINE__>(nodeL0, "stats"))
+    {
+      std::optional<int32_t> last365, last30;
       for(const shortjson::node_t& nodeL1 : nodeL0.toObject())
       {
-        if(nodeL1.identifier == "numberOfSessions")
+        if(is_object_if_named<__LINE__>(nodeL1, "numberOfSessions"))
         {
-          if(nodeL1.type != shortjson::Field::Object)
-            throw __LINE__;
           for(const shortjson::node_t& nodeL2 : nodeL1.toObject())
           {
-            if(nodeL2.identifier == "lastTwelveMonths" && nodeL2.type == shortjson::Field::Integer)
-              last365 = nodeL2.toNumber();
-            else if(nodeL2.identifier == "lastMonth" && nodeL2.type == shortjson::Field::Integer)
-              last30 = nodeL2.toNumber();
+            if(parse_integer_node<__LINE__>(nodeL2, "lastTwelveMonths", last365) ||
+               parse_integer_node<__LINE__>(nodeL2, "lastMonth", last30))
+            {
+            }
             else
               throw __LINE__;
           }
         }
       }
-      if(!last365 && !last30)
+      if(last365 && !last365 && last30 && !last30)
         nd.station.description = "dead";
     }
-    else if(nodeL0.identifier == "status")
+    else if(parse_string_node<__LINE__>(nodeL0, "status", val))
     {
-      auto val = safe_string<__LINE__>(nodeL0);
       if(val)
       {
         if(val == "outOfService")
-          nd.station.functional = false;
-        else if(*val == "available" ||
-                *val == "inUse")
-          nd.station.functional = true;
+          state = State::Broken;
+        else if(*val == "available")
+          state = State::Operational;
+        else if(*val == "inUse")
+          state = State::InUse;
         else if(*val == "unknown" ||
                 *val == "pending")
         {
         }
         else
-          nd.station.functional = true;
+          state = State::Operational;
       }
     }
-    else if(nodeL0.identifier == "message" && nodeL0.type != shortjson::Field::Null)
+    else if(is_object_if_named<__LINE__>(nodeL0, "message"))
     {
-      if(nodeL0.type != shortjson::Field::Object)
-        throw __LINE__;
       for(const shortjson::node_t& nodeL1 : nodeL0.toObject())
       {
         if(nodeL1.identifier == "text")
@@ -284,7 +285,7 @@ pair_data_t EptixScraper::ParseStationNode(const pair_data_t& data, const shortj
         else if(nodeL1.identifier == "date")
         {
           std::stringstream ss;
-          std::time_t time = safe_float64<__LINE__>(nodeL1);
+          std::time_t time = *safe_float64<__LINE__>(nodeL1);
           ss << std::put_time(std::localtime(&time), "%Y-%m-%d %X");
           optional_append(nd.station.description, ss.str());
         }
@@ -294,23 +295,20 @@ pair_data_t EptixScraper::ParseStationNode(const pair_data_t& data, const shortj
     }
     else if(nodeL0.identifier == "info")
     {
-      if(nodeL0.type != shortjson::Field::Null)
+
+      try { expect_null_node<__LINE__>(nodeL0, "info"); }
+      catch(...)
       {
         std::cout << "station: " << nd.station.station_id << std::endl
                   << nodeL0.identifier << ": " << safe_string<__LINE__>(nodeL0) << std::endl;
       }
     }
-    else if(nodeL0.identifier == "network")
+    else if(is_object_if_named<__LINE__>(nodeL0, "network"))
     {
-      if(nodeL0.type != shortjson::Field::Object)
-        throw __LINE__;
       for(const shortjson::node_t& nodeL1 : nodeL0.toObject())
       {
-        if(nodeL1.identifier == "name")
+        if(parse_string_node<__LINE__>(nodeL1, "name", val))
         {
-          if(nodeL1.type != shortjson::Field::String)
-            throw __LINE__;
-          auto val = nodeL1.toString();
           if(val == "ChargePoint")
             nd.station.network_id = Network::ChargePoint;
           else if(val == "SemaConnect")
@@ -334,95 +332,68 @@ pair_data_t EptixScraper::ParseStationNode(const pair_data_t& data, const shortj
         }
       }
     }
-    else if(nodeL0.identifier == "address")
+    else if(is_object_if_named<__LINE__>(nodeL0, "address"))
     {
-      if(nodeL0.type != shortjson::Field::Object)
-        throw __LINE__;
       for(const shortjson::node_t& nodeL1 : nodeL0.toObject())
       {
-        if(nodeL1.identifier == "city")
-          nd.station.contact.city = safe_string<__LINE__>(nodeL1);
-        else if(nodeL1.identifier == "country")
-          nd.station.contact.country = safe_string<__LINE__>(nodeL1);
-        else if(nodeL1.identifier == "postalCode")
-          nd.station.contact.postal_code = safe_string<__LINE__>(nodeL1);
-        else if(nodeL1.identifier == "state")
-          nd.station.contact.state = safe_string<__LINE__>(nodeL1);
-        else if(nodeL1.identifier == "street")
+        if(parse_string_node<__LINE__>(nodeL1, "city", nd.station.contact.city) ||
+           parse_string_node<__LINE__>(nodeL1, "country", nd.station.contact.country) ||
+           parse_string_node<__LINE__>(nodeL1, "postalCode", nd.station.contact.postal_code) ||
+           parse_string_node<__LINE__>(nodeL1, "state", nd.station.contact.state) ||
+           parse_street_node<__LINE__>(nodeL1, "street", nd.station.contact.street_number, nd.station.contact.street_name))
         {
-          if(nodeL1.type != shortjson::Field::String)
-            throw __LINE__;
-          auto val = nodeL1.toString();
-          try
-          {
-            auto pos = std::find_if(std::begin(val), std::end(val),
-                           [](unsigned char c){ return std::isspace(c); });
-            nd.station.contact.street_number = ext::from_string<int32_t>(std::string(std::begin(val), pos));
-            pos = std::next(pos);
-            nd.station.contact.street_name = std::string(pos, std::end(val));
-          }
-          catch(...)
-          {
-            nd.station.contact.street_name = val;
-          }
         }
-        else if(nodeL1.identifier == "location")
+        else if(parse_coords_node<__LINE__>(nodeL1, "location", "lat", "lng", nd.station.location))
         {
-          if(nodeL1.type != shortjson::Field::Object)
-            throw __LINE__;
-          for(const shortjson::node_t& nodeL2 : nodeL1.toObject())
-          {
-            if(nodeL2.identifier == "lat")
-              nd.station.location.latitude = safe_float64<__LINE__>(nodeL2);
-            else if(nodeL2.identifier == "lng")
-              nd.station.location.longitude = safe_float64<__LINE__>(nodeL2);
-            else
-              throw __LINE__;
-          }
           nd.query.bounds.setFocus(nd.station.location);
           nd.query.bounds.zoom(12.5);
         }
         else if(nodeL1.identifier == "street2")
         {
-          if(nodeL1.type != shortjson::Field::Null)
-            if(nodeL1.type == shortjson::Field::String &&
-               !nodeL1.toString().empty())
-              std::cout << "street2: " << nodeL1.toString() << std::endl;
+          try { expect_null_node<__LINE__>(nodeL1, "street2"); }
+          catch(...) { std::cout << "street2: " << *safe_string<__LINE__>(nodeL1) << std::endl; }
         }
-        else
+        else if(nodeL1.type != shortjson::Field::Null)
           throw __LINE__;
       }
     }
-    else if(nodeL0.identifier == "stations")
+    else if(is_array_if_named<__LINE__>(nodeL0, "stations"))
     {
-      if(nodeL0.type != shortjson::Field::Array)
-        throw __LINE__;
       for(const shortjson::node_t& nodeL1 : nodeL0.toArray())
       {
         port_t port;
+        port.state = state;
         if(nodeL1.type != shortjson::Field::Object)
           throw __LINE__;
         for(const shortjson::node_t& nodeL2 : nodeL1.toObject())
         {
-          if(nodeL2.identifier == "id")
-            port.port_id = safe_string<__LINE__>(nodeL2);
-          else if(nodeL2.identifier == "name")
-            port.display_name = safe_string<__LINE__>(nodeL2);
+          if(parse_string_node<__LINE__>(nodeL2, "id", port.port_id) ||
+             parse_string_node<__LINE__>(nodeL2, "name", port.display_name) ||
+             parse_float_node<__LINE__>(nodeL2, "power", port.power.kw))
+          {
+          }
           else if(nodeL2.identifier == "type")
             port.power.level = get_level(nodeL2);
-          else if(nodeL2.identifier == "power")
-            port.power.kw = safe_float64<__LINE__>(nodeL2);
-          else if(nodeL2.identifier == "tariff")
+          else if(is_object_if_named<__LINE__>(nodeL2, "tariff"))
           {
-            if(nodeL2.type != shortjson::Field::Object)
-              throw __LINE__;
             for(const shortjson::node_t& nodeL3 : nodeL2.toObject())
             {
-              if(nodeL3.identifier == "unit")
+              val.reset();
+              if(nodeL3.identifier == "desc" &&
+                 nodeL3.type == shortjson::Field::Object)
               {
-                if(nodeL3.type != shortjson::Field::String)
-                  throw __LINE__;
-                auto val = nodeL3.toString();
+                for(const shortjson::node_t& nodeL4 : nodeL3.toObject())
+                  parse_string_node<__LINE__>(nodeL4, "en", port.price.text);
+              }
+              else if(parse_string_node<__LINE__>(nodeL3, "desc", port.price.text) ||
+                 parse_float_node<__LINE__>(nodeL3, "price", port.price.per_unit))
+              {
+              }
+              else if(nodeL3.identifier == "type")
+              {
+              }
+              else if(parse_string_node<__LINE__>(nodeL3, "unit", val))
+              {
                 if(val == "hour")
                   port.price.unit = Unit::Hours;
                 else if(val == "kwh")
@@ -430,11 +401,6 @@ pair_data_t EptixScraper::ParseStationNode(const pair_data_t& data, const shortj
                 else
                   throw __LINE__;
               }
-              else if(nodeL3.identifier == "type")
-              {
-              }
-              else if(nodeL3.identifier == "price")
-                port.price.per_unit = safe_float64<__LINE__>(nodeL3);
             }
           }
         }

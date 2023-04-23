@@ -11,6 +11,7 @@
 // C++
 #include <string>
 #include <type_traits>
+#include <algorithm>
 
 // C
 #include <cassert>
@@ -18,6 +19,8 @@
 
 // libraries
 #include <shortjson/shortjson.h>
+
+#include "scraper_types.h"
 
 constexpr uint32_t operator "" _length(const char*, const size_t sz) noexcept
   { return sz; }
@@ -118,12 +121,14 @@ inline std::optional<int_type> safe_int(const shortjson::node_t& node)
 }
 
 template<int line_number>
-inline double safe_float64(const shortjson::node_t& node)
+inline std::optional<double> safe_float64(const shortjson::node_t& node)
 {
   if(node.type == shortjson::Field::Integer)
     return node.toNumber();
   if(node.type == shortjson::Field::Float)
     return node.toFloat();
+  if(node.type == shortjson::Field::Null)
+    return std::optional<double>();
   throw line_number;
 }
 
@@ -135,6 +140,147 @@ inline float safe_float_unit(const shortjson::node_t& node)
   throw line_number;
 }
 
+// helper functions
+
+template<int line>
+bool parse_string_node(const shortjson::node_t& node,
+                       const std::string_view& identifier,
+                       std::optional<std::string>& value)
+{
+  if(node.identifier == identifier)
+  {
+    value = safe_string<line>(node);
+    return bool(value);
+  }
+  return false;
+}
+
+template<int line>
+bool parse_float_node(const shortjson::node_t& node,
+                       const std::string_view& identifier,
+                      std::optional<double>& value)
+{
+  if(node.identifier == identifier)
+  {
+    value = safe_float64<line>(node);
+    return bool(value);
+  }
+  return false;
+}
+
+template<int line>
+bool parse_float_node(const shortjson::node_t& node,
+                      const std::string_view& identifier,
+                      double& value)
+{
+  if(node.identifier == identifier)
+  {
+    if(node.type == shortjson::Field::Integer)
+      value = node.toNumber();
+    else if(node.type == shortjson::Field::Float)
+      value = node.toFloat();
+    else
+      throw line;
+    return true;
+  }
+  return false;
+}
+
+template<int line, typename int_type = int32_t>
+bool parse_integer_node(const shortjson::node_t& node,
+                       const std::string_view& identifier,
+                        std::optional<int_type>& value)
+{
+  if(node.identifier == identifier)
+  {
+    value = safe_int<line,int_type>(node);
+    return bool(value);
+  }
+  return false;
+}
+
+template<int line>
+bool parse_coords_node(const shortjson::node_t& node,
+                       const std::string_view& coords_id,
+                       const std::string_view& latitude_id,
+                       const std::string_view& longitude_id,
+                       coords_t& value)
+{
+  if(node.identifier == coords_id)
+  {
+    if(node.type != shortjson::Field::Object)
+      throw line;
+    for(const auto& nodeL1 : node.toObject())
+    {
+      parse_float_node<line>(nodeL1, latitude_id, value.latitude) ||
+      parse_float_node<line>(nodeL1, longitude_id, value.longitude);
+    }
+    return true;
+  }
+  return false;
+}
+
+template<int line>
+bool parse_street_node(const shortjson::node_t& node,
+                       const std::string_view& identifier,
+                       std::optional<uint32_t>& street_number,
+                       std::optional<std::string>& street_name)
+{
+  if(node.identifier == identifier)
+  {
+    if(node.type != shortjson::Field::String)
+      throw __LINE__;
+    auto val = node.toString();
+    try
+    {
+      auto pos = std::find_if(std::begin(val), std::end(val),
+                     [](unsigned char c){ return std::isspace(c); });
+      street_number = ext::from_string<int32_t>(std::string(std::begin(val), pos));
+      pos = std::next(pos);
+      street_name = std::string(pos, std::end(val));
+    }
+    catch(...)
+    {
+      street_name = val;
+    }
+    return true;
+  }
+  return false;
+}
+
+template<int line>
+bool expect_null_node(const shortjson::node_t& node,
+                       const std::string_view& identifier)
+{
+  if(node.identifier == identifier)
+  {
+    if((node.type != shortjson::Field::Null && node.type != shortjson::Field::String) ||
+       (node.type == shortjson::Field::String && !node.toString().empty()))
+      throw line;
+    return true;
+  }
+  return false;
+}
+
+template<int line>
+constexpr bool is_object_if_named(const shortjson::node_t& node, const std::string_view name)
+{
+  if(node.identifier == name &&
+     node.type != shortjson::Field::Object)
+    throw line;
+  return node.identifier == name;
+}
+
+template<int line>
+constexpr bool is_array_if_named(const shortjson::node_t& node, const std::string_view name)
+{
+  if(node.identifier == name &&
+     node.type != shortjson::Field::Array)
+    throw line;
+  return node.identifier == name;
+}
+
+// serializer
 template <class container, std::enable_if_t<std::is_arithmetic_v<typename container::value_type>, bool> = true>
 struct serializable : container
 {

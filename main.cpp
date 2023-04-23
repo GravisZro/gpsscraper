@@ -79,16 +79,8 @@ std::string get_page(const std::string& name, const pair_data_t& data)
   std::cout << "requesting: " << data.query.URL << std::endl;
   if(!data.query.post_data.empty())
     std::cout << "  with post data: " << data.query.post_data << std::endl;
-#ifdef DEBUG
-  if(data.query.URL == "https://api.eptix.co/public/v1/sites/all?showConstruction=0")
-  {
-    std::ifstream ifs("eptix_index.json");
-    output.assign((std::istreambuf_iterator<char>(ifs) ),
-                  (std::istreambuf_iterator<char>()    ));
-  }
-  else
-#endif
-    if((!request.setOpt(CURLOPT_URL, data.query.URL) ||
+
+  if((!request.setOpt(CURLOPT_URL, data.query.URL) ||
       !request.perform()) &&
      request.getLastError() != CURLE_REMOTE_ACCESS_DENIED)
   {
@@ -112,9 +104,9 @@ int main(int argc, char* argv[])
 
   std::list<std::pair<std::string, ScraperBase*>> scrapers =
   {
-    //{ "eptix", new EptixScraper() },
+    { "eptix", new EptixScraper() },
     { "evgo", new EVGoScraper() },
-    //{ "electrify_america", new ElectrifyAmericaScraper() },
+    { "electrify_america", new ElectrifyAmericaScraper() },
     //{ "chargehub", new ChargehubScraper() },
   };
 
@@ -169,7 +161,7 @@ int main(int argc, char* argv[])
         insertion_count = 0;
         std::list<pair_data_t> main_queue;
         ScraperBase* scraper = pair.second;
-        std::clog << pair.first << ": scraper active" << std::endl;
+        std::cout << pair.first << ": scraper active" << std::endl;
 
         //static_request().setOpt(CURLOPT_COOKIE, ""); // erase all cookies and enable cookies
         {
@@ -183,7 +175,7 @@ int main(int argc, char* argv[])
         for(;!main_queue.empty(); main_queue.pop_front())
         {
           auto& pos = main_queue.front();
-          std::clog << "queue size: " << main_queue.size() << std::endl;
+          //std::clog << "queue size: " << main_queue.size() << std::endl;
 
 
           if(static_cast<typename std::underlying_type_t<Parser>>(pos.query.parser) &
@@ -195,7 +187,7 @@ int main(int argc, char* argv[])
           for(int i = 0; result.empty(); ++i)
           {
             if(i)
-              std::clog << "retry #" << i << std::endl;
+              std::cout << "retry #" << i << std::endl;
             result = get_page(pair.first, pos);
           }
 
@@ -204,7 +196,7 @@ int main(int argc, char* argv[])
             std::vector<pair_data_t> tmp = scraper->Parse(pos, result);
             test_queue = { std::begin(tmp), std::end(tmp) };
           }
-          std::clog << "result count: " << test_queue.size() << std::endl;
+          std::cout << "result count: " << test_queue.size() << std::endl;
 
           for(;!test_queue.empty(); test_queue.pop_front())
           {
@@ -219,7 +211,7 @@ int main(int argc, char* argv[])
                 db.addStation(nd.station), ++insertion_count;
                 break;
 
-              case Parser::UpdateRecord | Parser::MapArea:
+              case Parser::ReplaceRecord | Parser::MapArea:
                 db.addMapLocation(nd);
                 break;
 
@@ -285,18 +277,18 @@ int main(int argc, char* argv[])
             }
           }
         }
-        std::clog << pair.first << " insertions made: " << insertion_count << std::endl;
+        std::cout << pair.first << " insertions made: " << insertion_count << std::endl;
 
         total_insertions += insertion_count;
         delete scraper, scraper = nullptr;
       }
-      std::clog << "total insertions: " << total_insertions << std::endl;
+      std::cout << "total insertions: " << total_insertions << std::endl;
     }
     catch(std::string& error) // parser or SQL failure
     {
-      std::clog << "An irrecoverable error has occurred. Parsing halted." << std::endl;
-      std::clog << "{last scraper]:" << " insertions made: " << insertion_count << std::endl;
-      std::clog << "total insertions: " << total_insertions << std::endl;
+      std::cerr << "An irrecoverable error has occurred. Parsing halted." << std::endl;
+      std::cerr << "{last scraper]:" << " insertions made: " << insertion_count << std::endl;
+      std::cerr << "total insertions: " << total_insertions << std::endl;
       std::cerr << "ERROR: " << error << std::endl;
     }
     catch(std::logic_error& error)

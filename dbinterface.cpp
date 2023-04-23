@@ -81,10 +81,9 @@ DBInterface::DBInterface(std::string_view filename)
       "station_id"    TEXT NOT NULL,
       "latitude"      REAL NOT NULL CHECK (latitude  >  -90.0 AND latitude  <  90.0),
       "longitude"     REAL NOT NULL CHECK (longitude > -180.0 AND longitude < 180.0),
-      "name"          TEXT NOT NULL,
+      "name"          TEXT DEFAULT NULL,
       "description"   TEXT DEFAULT NULL,
       "access_public" BOOLEAN DEFAULT NULL,
-      "functional"    BOOLEAN DEFAULT NULL,
       "restrictions"  TEXT DEFAULT NULL,
       "contact_id"    INTEGER DEFAULT NULL,
       "schedule_id"   INTEGER DEFAULT NULL,
@@ -100,6 +99,7 @@ DBInterface::DBInterface(std::string_view filename)
       "station_id"    TEXT NOT NULL,
       "power_id"      INTEGER DEFAULT NULL,
       "price_id"      INTEGER DEFAULT NULL,
+      "state"         INTEGER DEFAULT NULL,
       "display_name"  TEXT DEFAULT NULL,
       "last_update"   TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
       PRIMARY KEY (network_id,port_id)
@@ -313,7 +313,7 @@ DBInterface::DBInterface(std::string_view filename)
       assert(false);
     }
   }
-  std::clog << "database initialized" << std::endl;
+  std::cout << "database initialized" << std::endl;
 }
 
 DBInterface::~DBInterface(void)
@@ -954,13 +954,15 @@ void DBInterface::addPort(port_t& port)
                                               "station_id,"
                                               "power_id,"
                                               "price_id,"
+                                              "state,"
                                               "display_name"
-                                            ") VALUES (?1,?2,?3,?4,?5,?6)")
+                                            ") VALUES (?1,?2,?3,?4,?5,?6,?7)")
                            .arg(port.network_id)
                            .arg(port.port_id)
                            .arg(port.station_id)
                            .arg(port.power.power_id)
                            .arg(port.price.price_id)
+                           .arg(port.state)
                            .arg(port.display_name));
 
   while(!q.execute() && q.lastError() == SQLITE_BUSY);
@@ -1030,7 +1032,7 @@ void DBInterface::addStation(station_t& station)
 {
   try
   {
-    station_t existing = getStation(*station.network_id, *station.station_id);
+    station.incorporate(getStation(*station.network_id, *station.station_id));
 
     assert(!station.ports.empty());
     ext::string port_ids;
@@ -1074,7 +1076,7 @@ void DBInterface::addStation(station_t& station)
     addSchedule(station.schedule);
     station.schedule.schedule_id = identifySchedule(station.schedule);
 
-    sql::query q = std::move(m_db.build_query("INSERT INTO stations ("
+    sql::query q = std::move(m_db.build_query("INSERT OR REPLACE INTO stations ("
                                                 "network_id,"
                                                 "station_id,"
                                                 "latitude,"
@@ -1082,12 +1084,11 @@ void DBInterface::addStation(station_t& station)
                                                 "name,"
                                                 "description,"
                                                 "access_public,"
-                                                "functional,"
                                                 "restrictions,"
                                                 "contact_id,"
                                                 "schedule_id,"
                                                 "port_ids"
-                                              ") VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)")
+                                              ") VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)")
                              .arg(station.network_id)
                              .arg(station.station_id)
                              .arg(station.location.latitude)
@@ -1095,7 +1096,6 @@ void DBInterface::addStation(station_t& station)
                              .arg(station.name)
                              .arg(station.description)
                              .arg(station.access_public)
-                             .arg(station.functional)
                              .arg(station.restrictions)
                              .arg(station.contact.contact_id)
                              .arg(station.schedule.schedule_id)
@@ -1127,7 +1127,6 @@ station_t DBInterface::getStation(sql::query&& q)
      .getField(station.name)
      .getField(station.description)
      .getField(station.access_public)
-     .getField(station.functional)
      .getField(station.restrictions)
      .getField(station.contact.contact_id)
      .getField(station.schedule.schedule_id)
@@ -1155,7 +1154,6 @@ station_t DBInterface::getStation(uint64_t contact_id)
                                                     "name,"
                                                     "description,"
                                                     "access_public,"
-                                                    "functional,"
                                                     "restrictions,"
                                                     "contact_id,"
                                                     "schedule_id,"
@@ -1185,7 +1183,6 @@ station_t DBInterface::getStation(Network network_id, const std::string& station
                                                     "name,"
                                                     "description,"
                                                     "access_public,"
-                                                    "functional,"
                                                     "restrictions,"
                                                     "contact_id,"
                                                     "schedule_id,"
@@ -1217,7 +1214,6 @@ station_t DBInterface::getStation(double latitude, double longitude)
                                                     "name,"
                                                     "description,"
                                                     "access_public,"
-                                                    "functional,"
                                                     "restrictions,"
                                                     "contact_id,"
                                                     "schedule_id,"

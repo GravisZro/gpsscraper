@@ -1,5 +1,6 @@
 #include "scraper_types.h"
 
+#include <iostream>
 #include <algorithm>
 #include <cassert>
 
@@ -18,12 +19,11 @@ void incorporate_optional(std::optional<T>& a, const std::optional<T>& b)
 template<>
 void incorporate_optional(std::optional<std::string>& a, const std::optional<std::string>& b)
 {
-  if(a && (!a && a->empty()))
+  if(!a || (a && a->empty())) // 'a' not set or 'a' empty
     a = b;
-  else if(a && b && !a->empty() && !b->empty())
-    assert(a == b);
-  else
-    a.reset();
+  else if(a && b) // both are set
+    if(a != b)
+      std::cout << "mismatched strings!: \"" << *a << "\" vs \"" << *b << "\"" << std::endl;
 }
 
 

@@ -24,6 +24,13 @@ enum class Connector : uint8_t
   Tesla     = 0x40,
 };
 
+enum class State : uint8_t
+{
+  Operational = 0,
+  InUse,
+  Broken,
+};
+
 enum class Network : uint8_t
 {
   Non_Networked = 17,
@@ -94,17 +101,18 @@ enum class Parser : uint8_t
   Station,
   MapArea,
   Initial,
-  UpdateRecord = 0x40,
-  UpdateComplete,
-  UpdatePort,
-  UpdateStation,
-  UpdateMapArea,
-  BuildQuery = 0x80,
+  BuildQuery = 0x10,
   BuildComplete,
   BuildPort,
   BuildStation,
   BuildMapArea,
   BuildInitial,
+  ReplaceRecord = 0x20,
+  ReplaceComplete,
+  ReplacePort,
+  ReplaceStation,
+  ReplaceMapArea,
+  ReplaceInitial,
 };
 
 enum class Unit : uint8_t
@@ -282,6 +290,7 @@ struct port_t
   std::optional<std::string> station_id;
   std::optional<std::string> port_id;
 
+  std::optional<State> state;
   power_t power;
   contact_t contact;
   price_t price;
@@ -303,7 +312,6 @@ struct station_t
   std::optional<std::string> description;
 
   std::optional<bool> access_public;
-  std::optional<bool> functional;
   std::optional<std::string> restrictions;
 
   power_t power;

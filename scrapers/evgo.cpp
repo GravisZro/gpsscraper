@@ -245,7 +245,7 @@ std::vector<pair_data_t> EVGoScraper::ParseMapArea(const pair_data_t& data, cons
   if(!child_ids.empty())
   {
     pair_data_t nd = data;
-    nd.query.parser = Parser::UpdateRecord | Parser::MapArea;
+    nd.query.parser = Parser::ReplaceRecord | Parser::MapArea;
     if(!child_ids.empty())
       nd.query.child_ids = child_ids;
     return_data.emplace(std::begin(return_data), nd); // insert to front
@@ -276,10 +276,8 @@ std::vector<pair_data_t> EVGoScraper::ParseStation([[maybe_unused]] const pair_d
       else if(nodeL1.identifier == "id")
       {
         pair_data_t nd;
-        {
-          nd.query.parser = Parser::BuildQuery | Parser::Port;
-          nd.query.node_id = safe_string<__LINE__>(nodeL1);
-        }
+        nd.query.parser = Parser::BuildQuery | Parser::Port;
+        nd.query.node_id = safe_string<__LINE__>(nodeL1);
         return_data.emplace_back(nd);
       }
     }
@@ -296,49 +294,31 @@ std::vector<pair_data_t> EVGoScraper::ParsePort(const pair_data_t& data, const s
   nd.station.network_id = data.station.network_id;
   nd.station.access_public = true;
 
-  std::optional<std::string> port_name;
+  std::optional<std::string> port_name, val;
   bool credit_card_ok = false;
   for(const shortjson::node_t& nodeL0 : response.toObject())
   {
-    if(nodeL0.identifier == "@class")
+    val.reset();
+    if(parse_string_node<__LINE__>(nodeL0, "siteId", nd.station.station_id) ||
+       parse_string_node<__LINE__>(nodeL0, "addressCity", nd.station.contact.city) ||
+       parse_string_node<__LINE__>(nodeL0, "addressCountryIso2Code", nd.station.contact.country) ||
+       parse_string_node<__LINE__>(nodeL0, "addressZipCode", nd.station.contact.postal_code) ||
+       parse_string_node<__LINE__>(nodeL0, "addressUsaStateCode", nd.station.contact.state) ||
+       parse_street_node<__LINE__>(nodeL0, "addressAddress1", nd.station.contact.street_number, nd.station.contact.street_name) ||
+       parse_float_node<__LINE__>(nodeL0, "latitude", nd.station.location.latitude) ||
+       parse_float_node<__LINE__>(nodeL0, "longitude", nd.station.location.longitude) ||
+       parse_string_node<__LINE__>(nodeL0, "caption", port_name) ||
+       parse_string_node<__LINE__>(nodeL0, "siteDisplayName", nd.station.name) ||
+       parse_string_node<__LINE__>(nodeL0, "notesForDriver", nd.station.description))
     {
-      auto val = safe_string<__LINE__>(nodeL0);
+    }
+    if(parse_string_node<__LINE__>(nodeL0, "@class", val))
+    {
       if(!val || *val != "com.driivz.stationserver.bl.dto.imp.StationDtoImp")
         throw __LINE__;
     }
-    else if(nodeL0.identifier == "id")
-      nd.station.station_id = safe_string<__LINE__>(nodeL0);
-    else if(nodeL0.identifier == "addressAddress1")
+    if(parse_string_node<__LINE__>(nodeL0, "stationModelName", val))
     {
-      auto val = safe_string<__LINE__>(nodeL0);
-      try
-      {
-        auto pos = std::find_if(std::begin(*val), std::end(*val),
-                       [](unsigned char c){ return std::isspace(c); });
-        nd.station.contact.street_number = ext::from_string<int32_t>(std::string(std::begin(*val), pos));
-        pos = std::next(pos);
-        nd.station.contact.street_name = std::string(pos, std::end(*val));
-      }
-      catch(...)
-      {
-        nd.station.contact.street_name = *val;
-      }
-    }
-    else if(nodeL0.identifier == "addressCity")
-      nd.station.contact.city = safe_string<__LINE__>(nodeL0);
-    else if(nodeL0.identifier == "addressUsaStateCode")
-      nd.station.contact.state = safe_string<__LINE__>(nodeL0);
-    else if(nodeL0.identifier == "addressCountryIso3Code")
-      nd.station.contact.country = safe_string<__LINE__>(nodeL0);
-    else if(nodeL0.identifier == "addressZipCode")
-      nd.station.contact.postal_code = safe_string<__LINE__>(nodeL0);
-    else if(nodeL0.identifier == "latitude")
-      nd.station.location.latitude = safe_float64<__LINE__>(nodeL0);
-    else if(nodeL0.identifier == "longitude")
-      nd.station.location.longitude = safe_float64<__LINE__>(nodeL0);
-    else if(nodeL0.identifier == "stationModelName")
-    {
-      auto val = safe_string<__LINE__>(nodeL0);
       if(val)
       {
         std::transform(std::begin(*val), std::end(*val), std::begin(*val),
@@ -371,12 +351,10 @@ std::vector<pair_data_t> EVGoScraper::ParsePort(const pair_data_t& data, const s
                 core == "LiteOn IC3 L2")
           credit_card_ok = false;
         else
-          std::clog << "station model: " << *val << std::endl;
+          std::cout << "station model: " << *val << std::endl;
       }
     }
-    else if(nodeL0.identifier == "caption")
-      port_name = safe_string<__LINE__>(nodeL0);
-    else if(nodeL0.identifier == "stationSockets")
+    else if(is_array_if_named<__LINE__>(nodeL0, "stationSockets"))
     {
       for(const shortjson::node_t& nodeL1 : nodeL0.toArray())
       {
@@ -385,11 +363,16 @@ std::vector<pair_data_t> EVGoScraper::ParsePort(const pair_data_t& data, const s
           port.price.payment |= Payment::Credit;
         for(const shortjson::node_t& nodeL2 : nodeL1.toObject())
         {
-          if(nodeL2.identifier == "id")
-            port.port_id = safe_string<__LINE__>(nodeL2);
-          else if(nodeL2.identifier == "stationModelSocketSocketTypeId")
+          val.reset();
+
+          if(parse_string_node<__LINE__>(nodeL2, "id", port.port_id) ||
+             parse_float_node<__LINE__>(nodeL2, "stationModelSocketMaximumPower", port.power.kw))
           {
-            auto val = safe_string<__LINE__>(nodeL2);
+          }
+          else if(nodeL2.identifier == "inMaintenance" && nodeL2.type == shortjson::Field::Boolean)
+            port.state = nodeL2.toBool() ? State::Broken : State::Operational;
+          else if(parse_string_node<__LINE__>(nodeL2, "stationModelSocketSocketTypeId", val))
+          {
             if(val == "TYPE_1_J1772_YAZAKI")
               port.power.connector = Connector::J1772;
             else if(val == "SAE_J1772_COMBO_US")
@@ -399,9 +382,8 @@ std::vector<pair_data_t> EVGoScraper::ParsePort(const pair_data_t& data, const s
             else
               throw __LINE__;
           }
-          else if(nodeL2.identifier == "stationModelSocketChargingMode")
+          else if(parse_string_node<__LINE__>(nodeL2, "stationModelSocketChargingMode", val))
           {
-            auto val = safe_string<__LINE__>(nodeL2);
             if(!val)
               throw __LINE__;
             else if(val == "LEVEL3")
@@ -413,43 +395,30 @@ std::vector<pair_data_t> EVGoScraper::ParsePort(const pair_data_t& data, const s
             else
               throw __LINE__;
           }
-          else if(nodeL2.identifier == "stationModelSocketMaximumPower")
-            port.power.kw = safe_float64<__LINE__>(nodeL2);
           else if(nodeL2.identifier == "rfidCardEnrollmentPending")
           {
             if(auto val = safe_bool<__LINE__>(nodeL2); !val && !*val)
               port.price.payment |= Payment::RFID;
           }
-          else if(nodeL2.identifier == "socketPrices")
+          else if(is_array_if_named<__LINE__>(nodeL2, "socketPrices"))
           {
             assert(nodeL2.toArray().size() == 1);
             for(const shortjson::node_t& nodeL3 : nodeL2.toArray().front().toObject())
             {
-              if(nodeL3.identifier == "currency")
+              val.reset();
+              if(parse_float_node<__LINE__>(nodeL3, "transactionFee", port.price.initial))
               {
-                auto val = safe_string<__LINE__>(nodeL3);
+              }
+              else if(parse_float_node<__LINE__>(nodeL3, "kwhPrice", port.price.per_unit))
+                 port.price.unit = Unit::KilowattHours;
+              else if(parse_float_node<__LINE__>(nodeL3, "minutePrice", port.price.per_unit))
+                 port.price.unit = Unit::Minutes;
+              if(parse_string_node<__LINE__>(nodeL3, "currency", val))
+              {
                 if(val && *val == "USD")
                   port.price.currency = Currency::USD;
                 else
                   throw __LINE__;
-              }
-              else if(nodeL3.identifier == "kwhPrice")
-              {
-                if(auto val = safe_float64<__LINE__>(nodeL3); val)
-                {
-                  port.price.unit = Unit::KilowattHours;
-                  port.price.per_unit = val;
-                }
-              }
-              else if(nodeL3.identifier == "transactionFee")
-                port.price.initial = safe_float64<__LINE__>(nodeL3);
-              else if(nodeL3.identifier == "minutePrice")
-              {
-                if(auto val = safe_float64<__LINE__>(nodeL3); val)
-                {
-                  port.price.unit = Unit::Minutes;
-                  port.price.per_unit = val;
-                }
               }
             }
           }
@@ -457,57 +426,41 @@ std::vector<pair_data_t> EVGoScraper::ParsePort(const pair_data_t& data, const s
         nd.station.ports.emplace_back(port);
       }
     }
-    else if(nodeL0.identifier == "siteDisplayName")
-      nd.station.name = safe_string<__LINE__>(nodeL0);
-    else if(nodeL0.identifier == "openingTimes")
+    else if(is_array_if_named<__LINE__>(nodeL0, "openingTimes"))
     {
-      if(nodeL0.type == shortjson::Field::Array)
+      std::optional<int32_t> hour;
+      for(const shortjson::node_t& nodeL1 : nodeL0.toArray())
       {
-        for(const shortjson::node_t& nodeL1 : nodeL0.toArray())
+        int day_of_week = -1;
+        for(const shortjson::node_t& nodeL2 : nodeL1.toObject())
         {
-          int day_of_week = -1;
-          for(const shortjson::node_t& nodeL2 : nodeL1.toObject())
+          val.reset();
+          hour.reset();
+          if(parse_string_node<__LINE__>(nodeL2, "dayOfWeekId", val))
           {
-            if(nodeL2.identifier == "dayOfWeekId")
-            {
-              auto val = safe_string<__LINE__>(nodeL2);
-              if(val)
-              {
-                     if(*val == "SUNDAY"   ) day_of_week = 0;
-                else if(*val == "MONDAY"   ) day_of_week = 1;
-                else if(*val == "TUESDAY"  ) day_of_week = 2;
-                else if(*val == "WEDNESDAY") day_of_week = 3;
-                else if(*val == "THURSDAY" ) day_of_week = 4;
-                else if(*val == "FRIDAY"   ) day_of_week = 5;
-                else if(*val == "SATURDAY" ) day_of_week = 6;
-                else
-                  throw __LINE__;
-              }
-              nd.station.schedule.days[day_of_week].emplace();
-            }
-            else if(nodeL2.identifier == "startHour")
-            {
-              if(auto val = safe_int<__LINE__>(nodeL2);*val)
-                nd.station.schedule.days[day_of_week]->first = ((*val / 36000) % 100) + ((*val / 36000) / 100) * 60;
-            }
-            else if(nodeL2.identifier == "endHour")
-            {
-              if(auto val = safe_int<__LINE__>(nodeL2);*val)
-                nd.station.schedule.days[day_of_week]->second = ((*val / 36000) % 100) + ((*val / 36000) / 100) * 60;
-            }
+                 if(val == "SUNDAY"   ) day_of_week = 0;
+            else if(val == "MONDAY"   ) day_of_week = 1;
+            else if(val == "TUESDAY"  ) day_of_week = 2;
+            else if(val == "WEDNESDAY") day_of_week = 3;
+            else if(val == "THURSDAY" ) day_of_week = 4;
+            else if(val == "FRIDAY"   ) day_of_week = 5;
+            else if(val == "SATURDAY" ) day_of_week = 6;
+            else if(val)
+              throw __LINE__;
+            nd.station.schedule.days[day_of_week].emplace();
           }
+          else if(parse_integer_node<__LINE__>(nodeL1, "startHour", hour) && hour)
+            nd.station.schedule.days[day_of_week]->first = ((*hour / 36000) % 100) + ((*hour / 36000) / 100) * 60;
+          else if(parse_integer_node<__LINE__>(nodeL1, "endHour", hour) && hour)
+            nd.station.schedule.days[day_of_week]->second = ((*hour / 36000) % 100) + ((*hour / 36000) / 100) * 60;
         }
       }
-      else
-        throw __LINE__;
     }
     else if(nodeL0.identifier == "siteHasGate")
     {
       if(auto gated = safe_bool<__LINE__>(nodeL0); gated && *gated)
         append_section(nd.station.restrictions, "gated");
     }
-    else if(nodeL0.identifier == "notesForDriver")
-      nd.station.description = safe_string<__LINE__>(nodeL0);
   }
 
   for(auto& port : nd.station.ports)
