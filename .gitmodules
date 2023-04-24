@@ -4,9 +4,6 @@
 [submodule "shortjson"]
 	path = shortjson
 	url = git@github.com:GravisZro/shortjson.git
-[submodule "TinyDeflate"]
-	path = TinyDeflate
-	url = git@github.com:bisqwit/TinyDeflate.git
 [submodule "tinf"]
 	path = tinf
 	url = git@github.com:jibsen/tinf.git
