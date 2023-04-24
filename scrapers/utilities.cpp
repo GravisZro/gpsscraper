@@ -9,6 +9,12 @@
 namespace ext
 {
 
+  template<> unsigned char from_string(const std::string& str, size_t* pos, int base)
+    { return std::stoi(str, pos, base); }
+
+  template<> unsigned int from_string(const std::string& str, size_t* pos, int base)
+    { return (unsigned int)(std::stoi(str, pos, base)); }
+
   template<> int from_string(const std::string& str, size_t* pos, int base)
     { return std::stoi(str, pos, base); }
 

@@ -30,10 +30,10 @@ static_assert("test"_length == 4, "misclaculation");
 namespace ext
 {
   template<typename T, std::enable_if_t<std::is_integral_v<T>, bool> = true>
-  T from_string(const std::string& str, size_t* pos = 0, int base = 10);
+  T from_string(const std::string& str, size_t* pos = nullptr, int base = 10);
 
   template<typename T, std::enable_if_t<std::is_floating_point_v<T>, bool> = true>
-  T from_string(const std::string& str, size_t* pos = 0);
+  T from_string(const std::string& str, size_t* pos = nullptr);
 
   class string : public std::string
   {
@@ -85,17 +85,8 @@ namespace ext
   };
 }
 
-// shortJSON helpers
-template<int line_number>
-inline std::optional<bool> safe_bool(const shortjson::node_t& node)
-{
-  if(node.type == shortjson::Field::Boolean)
-    return node.toBool();
-  if(node.type == shortjson::Field::Null)
-    return std::optional<bool>();
-  throw line_number;
-}
 
+// shortJSON helpers
 template<int line_number>
 inline std::optional<std::string> safe_string(const shortjson::node_t& node)
 {
@@ -110,175 +101,245 @@ inline std::optional<std::string> safe_string(const shortjson::node_t& node)
   throw line_number;
 }
 
-template<int line_number, typename int_type = int32_t>
-inline std::optional<int_type> safe_int(const shortjson::node_t& node)
+// helper wrapper struct functions
+struct safenode_t : shortjson::node_t
 {
-  if(node.type == shortjson::Field::Integer)
-    return int_type(node.toNumber());
-  if(node.type == shortjson::Field::Null)
-    return std::optional<int_type>();
-  throw line_number;
-}
+  using shortjson::node_t::node_t;
+  safenode_t(const shortjson::node_t& other) : shortjson::node_t(other) { }
 
-template<int line_number>
-inline std::optional<double> safe_float64(const shortjson::node_t& node)
-{
-  if(node.type == shortjson::Field::Integer)
-    return node.toNumber();
-  if(node.type == shortjson::Field::Float)
-    return node.toFloat();
-  if(node.type == shortjson::Field::Null)
-    return std::optional<double>();
-  throw line_number;
-}
-
-template<int line_number>
-inline float safe_float_unit(const shortjson::node_t& node)
-{
-  if(node.type == shortjson::Field::String)
-    return std::stof(node.toString());
-  throw line_number;
-}
-
-// helper functions
-
-template<int line>
-bool parse_string_node(const shortjson::node_t& node,
-                       const std::string_view& identifier,
-                       std::optional<std::string>& value)
-{
-  if(node.identifier == identifier)
+  template<int line_number>
+  bool idString(const std::string_view& identifier, std::optional<std::string>& value) const
   {
-    value = safe_string<line>(node);
-    return bool(value);
-  }
-  return false;
-}
-
-template<int line>
-bool parse_float_node(const shortjson::node_t& node,
-                       const std::string_view& identifier,
-                      std::optional<double>& value)
-{
-  if(node.identifier == identifier)
-  {
-    value = safe_float64<line>(node);
-    return bool(value);
-  }
-  return false;
-}
-
-template<int line>
-bool parse_float_node(const shortjson::node_t& node,
-                      const std::string_view& identifier,
-                      double& value)
-{
-  if(node.identifier == identifier)
-  {
-    if(node.type == shortjson::Field::Integer)
-      value = node.toNumber();
-    else if(node.type == shortjson::Field::Float)
-      value = node.toFloat();
-    else
-      throw line;
-    return true;
-  }
-  return false;
-}
-
-template<int line, typename int_type = int32_t>
-bool parse_integer_node(const shortjson::node_t& node,
-                       const std::string_view& identifier,
-                        std::optional<int_type>& value)
-{
-  if(node.identifier == identifier)
-  {
-    value = safe_int<line,int_type>(node);
-    return bool(value);
-  }
-  return false;
-}
-
-template<int line>
-bool parse_coords_node(const shortjson::node_t& node,
-                       const std::string_view& coords_id,
-                       const std::string_view& latitude_id,
-                       const std::string_view& longitude_id,
-                       coords_t& value)
-{
-  if(node.identifier == coords_id)
-  {
-    if(node.type != shortjson::Field::Object)
-      throw line;
-    for(const auto& nodeL1 : node.toObject())
+    if(this->identifier == identifier)
     {
-      parse_float_node<line>(nodeL1, latitude_id, value.latitude) ||
-      parse_float_node<line>(nodeL1, longitude_id, value.longitude);
+      value.reset();
+      if(type == shortjson::Field::String)
+        value = toString();
+      else if(type == shortjson::Field::Integer)
+        value = std::to_string(toNumber());
+      else if(type == shortjson::Field::Float)
+        value = std::to_string(toFloat());
+      else if(type == shortjson::Field::Null)
+        value.reset();
+      else
+        throw line_number;
+      return bool(value);
     }
-    return true;
+    return false;
   }
-  return false;
-}
 
-template<int line>
-bool parse_street_node(const shortjson::node_t& node,
-                       const std::string_view& identifier,
-                       std::optional<uint32_t>& street_number,
-                       std::optional<std::string>& street_name)
-{
-  if(node.identifier == identifier)
+  template<int line_number>
+  bool idBool(const std::string_view& identifier, std::optional<bool>& value) const
   {
-    if(node.type != shortjson::Field::String)
-      throw __LINE__;
-    auto val = node.toString();
-    try
+    if(this->identifier == identifier)
     {
-      auto pos = std::find_if(std::begin(val), std::end(val),
-                     [](unsigned char c){ return std::isspace(c); });
-      street_number = ext::from_string<int32_t>(std::string(std::begin(val), pos));
-      pos = std::next(pos);
-      street_name = std::string(pos, std::end(val));
+      value.reset();
+      if(type == shortjson::Field::Boolean)
+        value = toBool();
+      else if(type == shortjson::Field::Integer && (toNumber() == 1 || toNumber() == 0))
+        value = bool(toNumber());
+      else if(type == shortjson::Field::String && toString() == "true")
+        value = true;
+      else if(type == shortjson::Field::String && toString() == "false")
+        value = false;
+      else if(type == shortjson::Field::Null ||
+              (type == shortjson::Field::String && toString() == "null"))
+        value.reset();
+      else
+        throw line_number;
+      return bool(value);
     }
-    catch(...)
-    {
-      street_name = val;
-    }
-    return true;
+    return false;
   }
-  return false;
-}
 
-template<int line>
-bool expect_null_node(const shortjson::node_t& node,
-                       const std::string_view& identifier)
-{
-  if(node.identifier == identifier)
+  template<int line_number, typename integer_t, std::enable_if_t<std::is_integral_v<integer_t>, bool> = true>
+  bool idInteger(const std::string_view& identifier, std::optional<integer_t>& value) const
   {
-    if((node.type != shortjson::Field::Null && node.type != shortjson::Field::String) ||
-       (node.type == shortjson::Field::String && !node.toString().empty()))
-      throw line;
-    return true;
+    if(this->identifier == identifier)
+    {
+      value.reset();
+      if(type == shortjson::Field::Boolean)
+        value = toBool() ? 1 : 0;
+      else if(type == shortjson::Field::Integer)
+        value = toNumber();
+      else if(type == shortjson::Field::String)
+      {
+        try
+        {
+          value = ext::from_string<integer_t>(toString(), nullptr, 0);
+          if(std::to_string(*value) != toString())
+            value.reset();
+        }
+        catch(...) { value.reset(); }
+      }
+      else if(type == shortjson::Field::Null)
+        value.reset();
+      else
+        throw line_number;
+      return bool(value);
+    }
+    return false;
   }
-  return false;
-}
 
-template<int line>
-constexpr bool is_object_if_named(const shortjson::node_t& node, const std::string_view name)
-{
-  if(node.identifier == name &&
-     node.type != shortjson::Field::Object)
-    throw line;
-  return node.identifier == name;
-}
+  template<int line_number, typename floating_t>
+  bool idFloat(const std::string_view& identifier, std::optional<floating_t>& value) const
+  {
+    if(this->identifier == identifier)
+    {
+      value.reset();
+      if(type == shortjson::Field::Float)
+        value = toFloat();
+      else if(type == shortjson::Field::Integer)
+        value = toNumber();
+      else if(type == shortjson::Field::String)
+      {
+        try
+        {
+          value = ext::from_string<floating_t>(toString(), nullptr);
+          if(std::to_string(*value) != toString())
+            value.reset();
+        }
+        catch(...) { value.reset(); }
+      }
+      else if(type == shortjson::Field::Null)
+        value.reset();
+      else
+        throw line_number;
+      return bool(value);
+    }
+    return false;
+  }
 
-template<int line>
-constexpr bool is_array_if_named(const shortjson::node_t& node, const std::string_view name)
-{
-  if(node.identifier == name &&
-     node.type != shortjson::Field::Array)
-    throw line;
-  return node.identifier == name;
-}
+  template<int line_number, typename floating_t>
+  bool idFloat(const std::string_view& identifier, floating_t& value) const
+  {
+    std::optional<floating_t> v;
+    if(idFloat<line_number, floating_t>(identifier, v))
+      value = v.value();
+    return bool(v);
+  }
+
+  template<int line_number, typename enum_t, std::enable_if_t<std::is_enum_v<enum_t>, bool> = true>
+  bool idEnum(const std::string_view& identifier, std::optional<enum_t>& value) const
+  {
+    using underint_t = typename std::underlying_type_t<enum_t>;
+    std::optional<underint_t> v;
+    if(idInteger<line_number, std::underlying_type_t<enum_t>>(identifier, v))
+      value = enum_t(v.value());
+    return bool(v);
+  }
+
+  template<int line_number, typename integer_t>
+  bool idInteger(const std::string_view& identifier, integer_t& value) const
+  {
+    std::optional<integer_t> v;
+    if(idInteger<line_number, integer_t>(identifier, v))
+      value = v.value();
+    return bool(v);
+  }
+
+  template<int line_number>
+  bool idStreet(const std::string_view& identifier,
+                     std::optional<uint32_t>& street_number,
+                     std::optional<std::string>& street_name) const
+  {
+    if(this->identifier == identifier)
+    {
+      street_number.reset();
+      street_name.reset();
+      if(type != shortjson::Field::String)
+        throw line_number;
+      auto val = toString();
+      try
+      {
+        auto pos = std::find_if(std::begin(val), std::end(val),
+                       [](unsigned char c){ return std::isspace(c); });
+        street_number = ext::from_string<int32_t>(std::string(std::begin(val), pos));
+        pos = std::next(pos);
+        street_name = std::string(pos, std::end(val));
+      }
+      catch(...)
+      {
+        street_name = val;
+      }
+      return bool(street_name);
+    }
+    return false;
+  }
+
+  template<int line_number>
+  bool idCoords(const std::string_view& coords_id,
+                const std::string_view& latitude_id,
+                const std::string_view& longitude_id,
+                coords_t& value) const
+  {
+    if(this->identifier == coords_id)
+    {
+      if(type != shortjson::Field::Object)
+        throw line_number;
+      for(const safenode_t& node : safeObject<line_number>())
+      {
+        node.idFloat<line_number>(latitude_id, value.latitude) ||
+        node.idFloat<line_number>(longitude_id, value.longitude);
+      }
+      return value.latitude && value.longitude;
+    }
+    return false;
+  }
+
+  template<int line_number>
+  bool idObject(const std::string_view& identifier) const
+  {
+    if(this->identifier == identifier &&
+       type != shortjson::Field::Object)
+      throw line_number;
+    return this->identifier == identifier;
+  }
+
+  template<int line_number>
+  bool idArray(const std::string_view& identifier) const
+  {
+    if(this->identifier == identifier &&
+       type != shortjson::Field::Array)
+      throw line_number;
+    return this->identifier == identifier;
+  }
+
+  template<int line_number>
+  std::vector<safenode_t> safeObject(void) const
+  {
+    if(type != shortjson::Field::Object)
+      throw line_number;
+    std::vector<safenode_t> vec;
+    for(auto node : std::get<std::vector<node_t>>(data))
+      vec.emplace_back(node);
+    return vec;
+  }
+
+  template<int line_number>
+  std::vector<safenode_t> safeArray(void) const
+  {
+    if(type != shortjson::Field::Array)
+      throw line_number;
+    std::vector<safenode_t> vec;
+    for(auto node : std::get<std::vector<node_t>>(data))
+      vec.emplace_back(node);
+    return vec;
+  }
+
+#define idString    idString<__LINE__>
+#define idBool      idBool<__LINE__>
+#define idInteger   idInteger<__LINE__>
+#define idEnum      idEnum<__LINE__>
+#define idFloat     idFloat<__LINE__>
+#define idStreet    idStreet<__LINE__>
+#define idCoords    idCoords<__LINE__>
+#define idObject    idObject<__LINE__>
+#define idArray     idArray<__LINE__>
+#define safeObject  safeObject<__LINE__>
+#define safeArray   safeArray<__LINE__>
+};
+
 
 // serializer
 template <class container, std::enable_if_t<std::is_arithmetic_v<typename container::value_type>, bool> = true>

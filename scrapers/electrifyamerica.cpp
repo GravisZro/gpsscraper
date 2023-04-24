@@ -74,12 +74,12 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseMapArea([[maybe_unused]] 
 {
   auto input_str = decompress(input);
   std::vector<pair_data_t> return_data;
-  shortjson::node_t root = shortjson::Parse(input_str);
+  safenode_t root = shortjson::Parse(input_str);
 
   if(root.type != shortjson::Field::Array)
     throw __LINE__;
 
-  for(const shortjson::node_t& nodeL0 : root.toArray())
+  for(const safenode_t& nodeL0 : root.safeArray())
   {
     if(nodeL0.type != shortjson::Field::Object)
       throw __LINE__;
@@ -99,7 +99,7 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseMapArea([[maybe_unused]] 
 
 std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t& data, const std::string& input) const
 {
-  shortjson::node_t root = shortjson::Parse(input);
+  safenode_t root = shortjson::Parse(input);
 
   if(root.type != shortjson::Field::Object)
     throw __LINE__;
@@ -110,30 +110,30 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t
   nd.station.network_id = data.station.network_id;
   nd.station.access_public = true;
 
-  std::optional<std::string> val;
+  std::optional<std::string> tmpstr;
+  std::optional<bool> tmpbool;
 
-  for(const shortjson::node_t& nodeL0 : root.toObject())
+  for(const safenode_t& nodeL0 : root.safeObject())
   {
-    val.reset();
-    if(parse_string_node<__LINE__>(nodeL0, "siteId", nd.station.station_id) ||
-       parse_string_node<__LINE__>(nodeL0, "name", nd.station.name) ||
-       parse_street_node<__LINE__>(nodeL0, "address", nd.station.contact.street_number, nd.station.contact.street_name) ||
-       parse_string_node<__LINE__>(nodeL0, "city", nd.station.contact.city) ||
-       parse_string_node<__LINE__>(nodeL0, "state", nd.station.contact.state) ||
-       parse_string_node<__LINE__>(nodeL0, "country", nd.station.contact.country) ||
-       parse_string_node<__LINE__>(nodeL0, "postalCode", nd.station.contact.postal_code) ||
-       parse_coords_node<__LINE__>(nodeL0, "coordinates", "latitude", "longitude", nd.station.location) ||
-       parse_string_node<__LINE__>(nodeL0, "description", nd.station.description) ||
+    if(nodeL0.idString("siteId", nd.station.station_id) ||
+       nodeL0.idString("name", nd.station.name) ||
+       nodeL0.idStreet("address", nd.station.contact.street_number, nd.station.contact.street_name) ||
+       nodeL0.idString("city", nd.station.contact.city) ||
+       nodeL0.idString("state", nd.station.contact.state) ||
+       nodeL0.idString("country", nd.station.contact.country) ||
+       nodeL0.idString("postalCode", nd.station.contact.postal_code) ||
+       nodeL0.idCoords("coordinates", "latitude", "longitude", nd.station.location) ||
+       nodeL0.idString("description", nd.station.description) ||
        false)
     {
     }
-    else if(parse_string_node<__LINE__>(nodeL0, "type", val))
+    else if(nodeL0.idString("type", tmpstr))
     {
-      if(val == "PUBLIC")
+      if(tmpstr == "PUBLIC")
         nd.station.access_public = true;
-      else if(val == "COMMERCIAL")
+      else if(tmpstr == "COMMERCIAL")
         nd.station.access_public = false;
-      else if (val == "COMING_SOON")
+      else if (tmpstr == "COMING_SOON")
       {
         nd.query.parser = Parser::Discard;
         break; // exit loop
@@ -141,40 +141,39 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t
       else
         throw __LINE__;
     }
-    else if(nodeL0.identifier == "restricted")
+    else if(nodeL0.idBool("restricted", tmpbool))
     {
-      auto val = safe_bool<__LINE__>(nodeL0);
-      if(val && *val)
+      if(tmpbool == true)
         throw __LINE__; // never seen
     }
-    else if(is_object_if_named<__LINE__>(nodeL0, "openingTimes"))
+    else if(nodeL0.idObject("openingTimes"))
     {
-      for(const shortjson::node_t& nodeL1 : nodeL0.toObject())
+      for(const safenode_t& nodeL1 : nodeL0.safeObject())
       {
-        if(is_array_if_named<__LINE__>(nodeL1, "regularHours"))
+        if(nodeL1.idArray("regularHours"))
         {
-          for([[maybe_unused]] const shortjson::node_t& nodeL2 : nodeL1.toArray())
+          for([[maybe_unused]] const safenode_t& nodeL2 : nodeL1.safeArray())
           {
             throw __LINE__; // never seen
           }
         }
       }
     }
-    else if(is_array_if_named<__LINE__>(nodeL0, "pricing"))
+    else if(nodeL0.idArray("pricing"))
     {
-      for(const shortjson::node_t& nodeL1 : nodeL0.toArray())
+      for(const safenode_t& nodeL1 : nodeL0.safeArray())
       {
         if(nodeL1.type != shortjson::Field::Object)
           throw __LINE__;
         price_t price;
         price.currency = Currency::USD;
-        for(const shortjson::node_t& nodeL2 : nodeL1.toObject())
+        for(const safenode_t& nodeL2 : nodeL1.safeObject())
         {
-          if(parse_float_node<__LINE__>(nodeL2, "time", price.per_unit))
+          if(nodeL2.idFloat("time", price.per_unit))
             price.unit = Unit::Minutes;
-          else if(parse_float_node<__LINE__>(nodeL2, "energy", price.per_unit))
+          else if(nodeL2.idFloat("energy", price.per_unit))
             price.unit = Unit::KilowattHours;
-          else if(double val = 0.0; parse_float_node<__LINE__>(nodeL2, "maxPower", val))
+          else if(double val = 0.0; nodeL2.idFloat("maxPower", val))
           {
             if(val > 7)
               price.payment = Payment::Credit | Payment::API;
@@ -189,44 +188,43 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t
         }
       }
     }
-    else if(is_array_if_named<__LINE__>(nodeL0, "evses"))
+    else if(nodeL0.idArray("evses"))
     {
-      for(const shortjson::node_t& nodeL1 : nodeL0.toArray())
+      for(const safenode_t& nodeL1 : nodeL0.safeArray())
       {
         if(nodeL1.type != shortjson::Field::Object)
           throw __LINE__;
         port_t port;
-        for(const shortjson::node_t& nodeL2 : nodeL1.toObject())
+        for(const safenode_t& nodeL2 : nodeL1.safeObject())
         {
-          if(parse_string_node<__LINE__>(nodeL2, "id", port.port_id))
+          if(nodeL2.idString("id", port.port_id))
           {
           }
-          else if(is_array_if_named<__LINE__>(nodeL2, "connectors"))
+          else if(nodeL2.idArray("connectors"))
           {
-            for(const shortjson::node_t& nodeL3 : nodeL2.toArray())
+            for(const safenode_t& nodeL3 : nodeL2.safeArray())
             {
               if(nodeL3.type != shortjson::Field::Object)
                 throw __LINE__;
-              for(const shortjson::node_t& nodeL4 : nodeL3.toObject())
+              for(const safenode_t& nodeL4 : nodeL3.safeObject())
               {
-                val.reset();
-                if(parse_float_node<__LINE__>(nodeL4, "voltage", port.power.volt) ||
-                   parse_float_node<__LINE__>(nodeL4, "amperage", port.power.amp))
+                if(nodeL4.idFloat("voltage", port.power.volt) ||
+                   nodeL4.idFloat("amperage", port.power.amp))
                 {
                 }
-                else if(parse_string_node<__LINE__>(nodeL4, "standard", val))
+                else if(nodeL4.idString("standard", tmpstr))
                 {
-                  if(val == "IEC_62196_T1_COMBO")
+                  if(tmpstr == "IEC_62196_T1_COMBO")
                   {
                     port.power.level = 3;
                     port.power.connector = Connector::CCS1;
                   }
-                  else if(val == "CHADEMO")
+                  else if(tmpstr == "CHADEMO")
                   {
                     port.power.level = 3;
                     port.power.connector = Connector::CHAdeMO;
                   }
-                  else if(val == "IEC_62196_T1")
+                  else if(tmpstr == "IEC_62196_T1")
                   {
                     port.power.level = 2;
                     port.power.connector = Connector::J1772;
@@ -234,12 +232,12 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t
                   else
                     throw __LINE__;
                 }
-                else if(parse_string_node<__LINE__>(nodeL4, "statue", val))
+                else if(nodeL4.idString("statue", tmpstr))
                 {
-                  if(val == "UNKNOWN"){}
-                  else if(val == "AVAILABLE")
+                  if(tmpstr == "UNKNOWN"){}
+                  else if(tmpstr == "AVAILABLE")
                     port.state = State::Operational;
-                  else if(val == "CHARGING")
+                  else if(tmpstr == "CHARGING")
                     port.state = State::InUse;
                   else
                     throw __LINE__;

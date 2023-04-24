@@ -2,7 +2,7 @@
 #define EPTIX_H
 
 #include "scraper_base.h"
-#include <shortjson/shortjson.h>
+#include "utilities.h"
 
 class EptixScraper : public ScraperBase
 {
@@ -12,7 +12,7 @@ public:
   std::vector<pair_data_t> Parse(const pair_data_t& data, const std::string& input) const;
 
 private:
-  pair_data_t ParseStationNode(const pair_data_t& data, const shortjson::node_t& root) const;
+  pair_data_t ParseStationNode(const pair_data_t& data, const safenode_t& root) const;
 };
 
 
