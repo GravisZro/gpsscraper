@@ -229,7 +229,6 @@ std::vector<pair_data_t> ChargehubScraper::ParseStation(const pair_data_t& data,
          nodeL1.idString("Web", nd.station.contact.URL) ||
          nodeL1.idEnum("NetworkId", nd.station.network_id))
       {
-
       }
       else if(nodeL1.idString("AccessTime", tmpstr))
         nd.station.restrictions = get_access_restrictions(tmpstr);
@@ -237,7 +236,7 @@ std::vector<pair_data_t> ChargehubScraper::ParseStation(const pair_data_t& data,
         nd.station.access_public = get_access_public(tmpstr);
       else if(nodeL1.idString("PriceString", nd.station.price.text))
       {
-        if(nd.station.price.text && *nd.station.price.text == "Cost: Free")
+        if(nd.station.price.text == "Cost: Free")
         {
           nd.station.price.payment |= Payment::Free;
           nd.station.price.text.reset();
@@ -257,7 +256,10 @@ std::vector<pair_data_t> ChargehubScraper::ParseStation(const pair_data_t& data,
             if(nodeL3.idInteger("Level", port.power.level) ||
                nodeL3.idFloatUnit("Amp", port.power.amp) ||
                nodeL3.idFloatUnit("Kw", port.power.kw) ||
-               nodeL3.idFloatUnit("Volt", port.power.volt))
+               nodeL3.idFloatUnit("Volt", port.power.volt) ||
+               nodeL3.idFloat("ChargingRate", port.price.per_unit) ||
+               nodeL3.idEnum("ChargingRateUnit", port.price.unit) ||
+               nodeL3.idEnum("Status", port.status))
             {
             }
             else if(nodeL3.idString("PriceString", port.price.text))
