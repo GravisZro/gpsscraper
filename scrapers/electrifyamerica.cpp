@@ -236,9 +236,9 @@ std::vector<pair_data_t> ElectrifyAmericaScraper::ParseStation(const pair_data_t
                 {
                   if(tmpstr == "UNKNOWN"){}
                   else if(tmpstr == "AVAILABLE")
-                    port.state = State::Operational;
+                    port.status = Status::Operational;
                   else if(tmpstr == "CHARGING")
-                    port.state = State::InUse;
+                    port.status = Status::InUse;
                   else
                     throw __LINE__;
                 }

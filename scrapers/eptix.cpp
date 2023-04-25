@@ -158,7 +158,7 @@ pair_data_t EptixScraper::ParseStationNode(const pair_data_t& data, const safeno
   nd.query.bounds = data.query.bounds;
   nd.station.access_public = true; // public by default
 
-  std::optional<State> state;
+  std::optional<Status> status;
   std::optional<std::string> tmpstr;
   std::optional<bool> tmpbool;
   std::optional<double> tmpdbl;
@@ -259,17 +259,17 @@ pair_data_t EptixScraper::ParseStationNode(const pair_data_t& data, const safeno
     else if(nodeL0.idString("status", tmpstr))
     {
       if(tmpstr == "outOfService")
-        state = State::Broken;
+        status = Status::Broken;
       else if(*tmpstr == "available")
-        state = State::Operational;
+        status = Status::Operational;
       else if(*tmpstr == "inUse")
-        state = State::InUse;
+        status = Status::InUse;
       else if(*tmpstr == "unknown" ||
               *tmpstr == "pending")
       {
       }
       else
-        state = State::Operational;
+        status = Status::Operational;
     }
     else if(nodeL0.idObject("message"))
     {
@@ -353,7 +353,7 @@ pair_data_t EptixScraper::ParseStationNode(const pair_data_t& data, const safeno
       for(const safenode_t& nodeL1 : nodeL0.safeArray())
       {
         port_t port;
-        port.state = state;
+        port.status = status;
         if(nodeL1.type != shortjson::Field::Object)
           throw __LINE__;
         for(const safenode_t& nodeL2 : nodeL1.safeObject())

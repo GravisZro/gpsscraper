@@ -99,7 +99,7 @@ DBInterface::DBInterface(std::string_view filename)
       "station_id"    TEXT NOT NULL,
       "power_id"      INTEGER DEFAULT NULL,
       "price_id"      INTEGER DEFAULT NULL,
-      "state"         INTEGER DEFAULT NULL,
+      "status"        INTEGER DEFAULT NULL,
       "display_name"  TEXT DEFAULT NULL,
       "last_update"   TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
       PRIMARY KEY (network_id,port_id)
@@ -954,7 +954,7 @@ void DBInterface::addPort(port_t& port)
                                               "station_id,"
                                               "power_id,"
                                               "price_id,"
-                                              "state,"
+                                              "status,"
                                               "display_name"
                                             ") VALUES (?1,?2,?3,?4,?5,?6,?7)")
                            .arg(port.network_id)
@@ -962,7 +962,7 @@ void DBInterface::addPort(port_t& port)
                            .arg(port.station_id)
                            .arg(port.power.power_id)
                            .arg(port.price.price_id)
-                           .arg(port.state)
+                           .arg(port.status)
                            .arg(port.display_name));
 
   while(!q.execute() && q.lastError() == SQLITE_BUSY);
@@ -979,6 +979,7 @@ port_t DBInterface::getPort(Network network_id, const std::string& port_id)
                                                 "station_id,"
                                                 "power_id,"
                                                 "price_id,"
+                                                "status,"
                                                 "display_name "
                                               "FROM "
                                                 "ports "
@@ -995,6 +996,7 @@ port_t DBInterface::getPort(Network network_id, const std::string& port_id)
       q.getField(port.station_id)
        .getField(port.power.power_id)
        .getField(port.price.price_id)
+       .getField(port.status)
        .getField(port.display_name);
   }
   port.power = getPower(port.power.power_id);

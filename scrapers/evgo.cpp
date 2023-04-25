@@ -363,7 +363,7 @@ std::vector<pair_data_t> EVGoScraper::ParsePort(const pair_data_t& data, const s
           {
           }
           else if(nodeL2.identifier == "inMaintenance" && nodeL2.type == shortjson::Field::Boolean)
-            port.state = nodeL2.toBool() ? State::Broken : State::Operational;
+            port.status = nodeL2.toBool() ? Status::Broken : Status::Operational;
           else if(nodeL2.idString("stationModelSocketSocketTypeId", tmpstr))
           {
             if(tmpstr == "TYPE_1_J1772_YAZAKI")

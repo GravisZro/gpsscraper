@@ -24,11 +24,11 @@ enum class Connector : uint8_t
   Tesla     = 0x40,
 };
 
-enum class State : uint8_t
+enum class Status : uint8_t
 {
-  Operational = 0,
+  Broken = 0,
+  Operational,
   InUse,
-  Broken,
 };
 
 enum class Network : uint8_t
@@ -290,7 +290,7 @@ struct port_t
   std::optional<std::string> station_id;
   std::optional<std::string> port_id;
 
-  std::optional<State> state;
+  std::optional<Status> status;
   power_t power;
   contact_t contact;
   price_t price;
