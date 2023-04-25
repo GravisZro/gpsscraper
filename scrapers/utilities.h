@@ -85,23 +85,7 @@ namespace ext
   };
 }
 
-
-// shortJSON helpers
-template<int line_number>
-inline std::optional<std::string> safe_string(const shortjson::node_t& node)
-{
-  if(node.type == shortjson::Field::String)
-    return node.toString();
-  if(node.type == shortjson::Field::Integer)
-    return std::to_string(node.toNumber());
-  if(node.type == shortjson::Field::Float)
-    return std::to_string(node.toFloat());
-  if(node.type == shortjson::Field::Null)
-    return std::optional<std::string>();
-  throw line_number;
-}
-
-// helper wrapper struct functions
+// shortJSON helper wrapper struct functions
 struct safenode_t : shortjson::node_t
 {
   using shortjson::node_t::node_t;
