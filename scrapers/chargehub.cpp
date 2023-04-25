@@ -24,10 +24,15 @@ pair_data_t ChargehubScraper::BuildQuery(const pair_data_t& input) const
     default: throw std::string(__FILE__).append(": unknown parser: ").append(std::to_string(int(input.query.parser)));
 
     case Parser::BuildQuery | Parser::Initial:
+
+      data.query.parser = Parser::Station;
+      data.query.URL = "https://apiv2.chargehub.com/api/stations/details?language=en&station_id=36111";
+      break;
+/*/
       data.query.parser = Parser::Initial;
       data.query.bounds = { { 12.5, 55.0 }, { 90.0, -90.0 } };
       break;
-
+/*/
     case Parser::BuildQuery | Parser::MapArea:
       data.query.parser = Parser::MapArea;
       data.query.URL= "https://apiv2.chargehub.com/api/locationsmap"
@@ -42,9 +47,9 @@ pair_data_t ChargehubScraper::BuildQuery(const pair_data_t& input) const
 
     case Parser::BuildQuery | Parser::Station:
       data.query.parser = Parser::Station;
-      if(!input.station.station_id)
+      if(!input.query.node_id)
         throw __LINE__;
-      data.query.URL = "https://apiv2.chargehub.com/api/stations/details?language=en&station_id=" + *input.station.station_id;
+      data.query.URL = "https://apiv2.chargehub.com/api/stations/details?language=en&station_id=" + *input.query.node_id;
       break;
   }
   return data;
@@ -100,27 +105,15 @@ std::vector<pair_data_t> ChargehubScraper::ParseMapArea(const std::string &input
   std::vector<pair_data_t> return_data;
   safenode_t root = shortjson::Parse(input);
 
-  if(root.type != shortjson::Field::Object &&
-     root.type != shortjson::Field::Array)
-    throw __LINE__;
-
   for(const safenode_t& nodeL0 : root.safeArray())
   {
-    if(nodeL0.type == shortjson::Field::Array)
-      throw __LINE__;
-
-    auto nodeL1 = nodeL0.safeArray().front();
-    if(nodeL1.identifier != "LocID")
-      throw __LINE__;
-    if(nodeL1.type != shortjson::Field::Integer)
-      throw __LINE__;
-
-    std::cout << "station id: " << int(nodeL1.toNumber()) << std::endl;
-
     pair_data_t nd;
     nd.query.parser = Parser::BuildQuery | Parser::Station;
-    nd.station.station_id = safe_string<__LINE__>(nodeL1);
-    return_data.emplace_back(BuildQuery(nd));
+
+    for(const safenode_t& nodeL1 : nodeL0.safeObject())
+      nodeL1.idString("LocID", nd.query.node_id);
+
+    return_data.emplace_back(nd);
   }
   return return_data;
 }
@@ -211,18 +204,11 @@ Payment get_payment_methods(std::optional<std::string> str)
 std::vector<pair_data_t> ChargehubScraper::ParseStation(const pair_data_t& data, const std::string& input) const
 {
   std::vector<pair_data_t> return_data;
+  std::optional<std::string> tmpstr;
   safenode_t root = shortjson::Parse(input);
 
-  if(root.type != shortjson::Field::Object &&
-     root.type != shortjson::Field::Array)
-    throw __LINE__;
-
-  for(const safenode_t& nodeL0 : root.safeArray())
+  for(const safenode_t& nodeL0 : root.safeObject())
   {
-    if(nodeL0.type != shortjson::Field::Array &&
-       nodeL0.type != shortjson::Field::Object)
-      throw __LINE__;
-
     pair_data_t nd = data;
     nd.query.parser = Parser::Complete;
 
@@ -245,10 +231,10 @@ std::vector<pair_data_t> ChargehubScraper::ParseStation(const pair_data_t& data,
       {
 
       }
-      else if(nodeL1.identifier == "AccessTime")
-        nd.station.restrictions = get_access_restrictions(safe_string<__LINE__>(nodeL1));
-      else if(nodeL1.identifier == "AccessType")
-        nd.station.access_public = get_access_public(safe_string<__LINE__>(nodeL1));
+      else if(nodeL1.idString("AccessTime", tmpstr))
+        nd.station.restrictions = get_access_restrictions(tmpstr);
+      else if(nodeL1.idString("AccessType", tmpstr))
+        nd.station.access_public = get_access_public(tmpstr);
       else if(nodeL1.idString("PriceString", nd.station.price.text))
       {
         if(nd.station.price.text && *nd.station.price.text == "Cost: Free")
@@ -257,38 +243,23 @@ std::vector<pair_data_t> ChargehubScraper::ParseStation(const pair_data_t& data,
           nd.station.price.text.reset();
         }
       }
-      else if(nodeL1.identifier == "PaymentMethods")
-        nd.station.price.payment |= get_payment_methods(safe_string<__LINE__>(nodeL1));
-      else if(nodeL1.identifier == "PlugsArray")
+      else if(nodeL1.idString("PaymentMethods", tmpstr))
+        nd.station.price.payment |= get_payment_methods(tmpstr);
+      else if(nodeL1.idArray("PlugsArray"))
       {
-        if(nodeL1.type != shortjson::Field::Object &&
-           nodeL1.type != shortjson::Field::Array)
-          throw __LINE__;
-
         for(auto& nodeL2 : nodeL1.safeArray())
         {
           port_t port;
           port.weird = false;
-          if(nodeL2.type != shortjson::Field::Object &&
-             nodeL2.type != shortjson::Field::Array)
-            throw __LINE__;
 
-          for(auto& nodeL3 : nodeL2.safeArray())
+          for(auto& nodeL3 : nodeL2.safeObject())
           {
             if(nodeL3.idInteger("Level", port.power.level) ||
-               nodeL3.idFloat("Amp", port.power.amp) ||
-               nodeL3.idFloat("Kw", port.power.kw) ||
-               nodeL3.idFloat("Volt", port.power.volt))
+               nodeL3.idFloatUnit("Amp", port.power.amp) ||
+               nodeL3.idFloatUnit("Kw", port.power.kw) ||
+               nodeL3.idFloatUnit("Volt", port.power.volt))
             {
             }
-            else if(nodeL3.identifier == "Network")
-            {
-              if(nodeL3.type == shortjson::Field::Integer &&
-                 nd.station.network_id != Network(nodeL3.toNumber()))
-                 throw __LINE__;
-            }
-            else if(nodeL3.identifier == "Name")
-              connector_from_string(safe_string<__LINE__>(nodeL3), port);
             else if(nodeL3.idString("PriceString", port.price.text))
             {
               if(port.price.text && *port.price.text == "Cost: Free")
@@ -297,26 +268,30 @@ std::vector<pair_data_t> ChargehubScraper::ParseStation(const pair_data_t& data,
                 port.price.text.reset();
               }
             }
-            else if(nodeL3.identifier == "PaymentMethods")
-              port.price.payment |= get_payment_methods(safe_string<__LINE__>(nodeL3));
-          }
-
-          safenode_t portsL0;
-          if(!shortjson::FindNode(nodeL2, portsL0, "Ports"))
-            throw __LINE__;
-
-          for(auto& portsL1 : portsL0.safeArray())
-          {
-            port_t thisport = port;
-            for(const safenode_t& portsL2 : portsL1.safeArray())
+            else if(nodeL3.idString("PaymentMethods", tmpstr))
+              port.price.payment |= get_payment_methods(tmpstr);
+            else if(nodeL3.idArray("Ports"))
             {
-              if(portsL2.idString("portId", thisport.port_id) ||
-                 portsL2.idString("netPortId", thisport.port_id) ||
-                 portsL2.idString("displayName", thisport.display_name))
+              for(auto& nodeL4 : nodeL3.safeArray())
               {
+                port_t thisport = port;
+                for(const safenode_t& portsL2 : nodeL4.safeObject())
+                {
+                  if(portsL2.idString("portId", thisport.port_id) ||
+                     portsL2.idString("displayName", thisport.display_name))
+                  {
+                  }
+                  else if(portsL2.idString("netPortId", tmpstr))
+                    thisport.port_id = tmpstr;
+                }
+                nd.station.ports.push_back(thisport);
               }
             }
-            nd.station.ports.push_back(thisport);
+            else if(nodeL3.idString("Name", tmpstr))
+            {
+              for(auto& thisport : nd.station.ports)
+                connector_from_string(tmpstr, thisport);
+            }
           }
         }
       }

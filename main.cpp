@@ -104,10 +104,10 @@ int main(int argc, char* argv[])
 
   std::list<std::pair<std::string, ScraperBase*>> scrapers =
   {
+    { "chargehub", new ChargehubScraper() },
+    { "electrify_america", new ElectrifyAmericaScraper() },
     { "eptix", new EptixScraper() },
     { "evgo", new EVGoScraper() },
-    { "electrify_america", new ElectrifyAmericaScraper() },
-    //{ "chargehub", new ChargehubScraper() },
   };
 
 
@@ -184,11 +184,14 @@ int main(int argc, char* argv[])
             pos = scraper->BuildQuery(pos);
           }
           std::string result;
-          for(int i = 0; result.empty(); ++i)
+          if(pos.query.parser != Parser::Initial)
           {
-            if(i)
-              std::cout << "retry #" << i << std::endl;
-            result = get_page(pair.first, pos);
+            for(int i = 0; result.empty(); ++i)
+            {
+              if(i)
+                std::cout << "retry #" << i << std::endl;
+              result = get_page(pair.first, pos);
+            }
           }
 
           std::list<pair_data_t> test_queue;

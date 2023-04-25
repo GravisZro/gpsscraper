@@ -219,6 +219,33 @@ struct safenode_t : shortjson::node_t
     return bool(v);
   }
 
+
+  template<int line_number, typename floating_t>
+  bool idFloatUnit(const std::string_view& identifier, std::optional<floating_t>& value) const
+  {
+    if(this->identifier == identifier)
+    {
+      value.reset();
+      if(type == shortjson::Field::String)
+      {
+        try
+        {
+          std::size_t pos = 0;
+          value = ext::from_string<floating_t>(toString(), &pos);
+          if(!pos)
+            value.reset();
+        }
+        catch(...) { value.reset(); }
+      }
+      else if(type == shortjson::Field::Null)
+        value.reset();
+      else
+        throw line_number;
+      return bool(value);
+    }
+    return false;
+  }
+
   template<int line_number, typename enum_t, std::enable_if_t<std::is_enum_v<enum_t>, bool> = true>
   bool idEnum(const std::string_view& identifier, std::optional<enum_t>& value) const
   {
@@ -332,6 +359,7 @@ struct safenode_t : shortjson::node_t
 #define idInteger   idInteger<__LINE__>
 #define idEnum      idEnum<__LINE__>
 #define idFloat     idFloat<__LINE__>
+#define idFloatUnit idFloatUnit<__LINE__>
 #define idStreet    idStreet<__LINE__>
 #define idCoords    idCoords<__LINE__>
 #define idObject    idObject<__LINE__>

@@ -426,7 +426,7 @@ void DBInterface::addURL(const std::optional<std::string>& URL)
     sql::query q = std::move(m_db.build_query("INSERT INTO URLs (URL) VALUES (?1)").arg(URL));
 
     while(!q.execute() && q.lastError() == SQLITE_BUSY);
-    assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_CONSTRAINT_PRIMARYKEY);
+    assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_CONSTRAINT_UNIQUE);
   }
 }
 
