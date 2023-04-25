@@ -39,7 +39,7 @@ SOURCES += \
         scrapers/scraper_types.cpp \
         scrapers/utilities.cpp \
         scrapers/scraper_base.cpp \
-        shortjson/shortjson_strict.cpp \
+        shortjson/shortjson_tolerant.cpp \
         simplified/simple_sqlite.cpp \
         tinf/src/adler32.c \
         tinf/src/crc32.c \
