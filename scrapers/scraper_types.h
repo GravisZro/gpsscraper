@@ -117,8 +117,8 @@ enum class Parser : uint8_t
 
 enum class Unit : uint8_t
 {
-  KilowattHours = 0,
-  WattHours,
+  WattHours = 0,
+  KilowattHours,
   Minutes,
   Hours,
 };
@@ -276,6 +276,9 @@ struct schedule_t
 
   std::optional<uint64_t> schedule_id; // ignored in functions
   std::array<std::optional<hours_t>, 7> days;
+
+  operator std::string(void) const;
+  schedule_t& operator =(const std::string& input);
 
   operator bool(void) const;
   bool operator ==(const schedule_t& o) const;

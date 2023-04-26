@@ -133,30 +133,45 @@ void contact_t::incorporate(const contact_t& o)
 }
 
 // === operation_schedule_t ===
+
+schedule_t::operator std::string(void) const
+{
+  std::string out;
+  for(const auto& dayofweek : days)
+  {
+    if(!out.empty())
+      out.push_back(';');
+    if(dayofweek)
+      out += std::to_string(dayofweek->first) + "," +
+             std::to_string(dayofweek->second);
+  }
+  return out;
+}
+
+schedule_t& schedule_t::operator =(const std::string& input)
+{
+  int daynum = 0;
+  for(const auto& dayofweek : ext::string(input).split_string({';'}))
+  {
+    auto comma = dayofweek.find_first_of(',');
+    days[daynum].reset();
+    if(comma == std::string::npos)
+      days[daynum].emplace(ext::from_string<int32_t>(dayofweek.substr(0, comma - 1)),
+                           ext::from_string<int32_t>(dayofweek.substr(comma + 1)));
+  }
+  return *this;
+}
+
 schedule_t::operator bool(void) const
-  { return days[0] || days[1] || days[2] || days[3] || days[4] || days[5] || days[6]; }
+  { return std::any_of(std::begin(days), std::end(days), [](const std::optional<hours_t>& i) { return bool(i); }); }
 
 bool schedule_t::operator ==(const schedule_t& o) const
-{
-  return
-      days[0] == o.days[0] &&
-      days[1] == o.days[1] &&
-      days[2] == o.days[2] &&
-      days[3] == o.days[3] &&
-      days[4] == o.days[4] &&
-      days[5] == o.days[5] &&
-      days[6] == o.days[6];
-}
+  { return days == o.days; }
 
 void schedule_t::incorporate(const schedule_t& o)
 {
-  incorporate_optional(days[0], o.days[0]);
-  incorporate_optional(days[1], o.days[1]);
-  incorporate_optional(days[2], o.days[2]);
-  incorporate_optional(days[3], o.days[3]);
-  incorporate_optional(days[4], o.days[4]);
-  incorporate_optional(days[5], o.days[5]);
-  incorporate_optional(days[6], o.days[6]);
+  for(std::size_t i = 0; i < days.size(); ++i)
+    incorporate_optional(days[i], o.days[i]);
 }
 
 // === station_t ===
@@ -210,8 +225,8 @@ std::ostream & operator << (std::ostream &out, const Unit value) noexcept
 {
   switch(value)
   {
-    case Unit::KilowattHours: out << "KilowattHours"; break;
     case Unit::WattHours: out << "WattHours"; break;
+    case Unit::KilowattHours: out << "KilowattHours"; break;
     case Unit::Minutes: out << "Minutes"; break;
     case Unit::Hours: out << "Hours"; break;
   }

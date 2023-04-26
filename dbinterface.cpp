@@ -3,6 +3,7 @@
 // STL
 #include <iostream>
 #include <algorithm>
+#include <utility>
 #include <vector>
 #include <cassert>
 
@@ -81,12 +82,12 @@ DBInterface::DBInterface(std::string_view filename)
       "station_id"    TEXT NOT NULL,
       "latitude"      REAL NOT NULL CHECK (latitude  >  -90.0 AND latitude  <  90.0),
       "longitude"     REAL NOT NULL CHECK (longitude > -180.0 AND longitude < 180.0),
-      "name"          TEXT DEFAULT NULL,
-      "description"   TEXT DEFAULT NULL,
-      "access_public" BOOLEAN DEFAULT NULL,
-      "restrictions"  TEXT DEFAULT NULL,
-      "contact_id"    INTEGER DEFAULT NULL,
-      "schedule_id"   INTEGER DEFAULT NULL,
+      "name"          TEXT      DEFAULT NULL,
+      "description"   TEXT      DEFAULT NULL,
+      "access_public" BOOLEAN   DEFAULT NULL,
+      "restrictions"  TEXT      DEFAULT NULL,
+      "contact_id"    INTEGER   DEFAULT NULL,
+      "schedule_id"   INTEGER   DEFAULT NULL,
       "port_ids"      TEXT NOT NULL,
       "last_update"   TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
       PRIMARY KEY (latitude, longitude)
@@ -97,10 +98,10 @@ DBInterface::DBInterface(std::string_view filename)
       "network_id"    INTEGER NOT NULL,
       "port_id"       TEXT NOT NULL,
       "station_id"    TEXT NOT NULL,
-      "power_id"      INTEGER DEFAULT NULL,
-      "price_id"      INTEGER DEFAULT NULL,
-      "status"        INTEGER DEFAULT NULL,
-      "display_name"  TEXT DEFAULT NULL,
+      "power_id"      INTEGER   DEFAULT NULL,
+      "price_id"      INTEGER   DEFAULT NULL,
+      "status"        INTEGER   DEFAULT NULL,
+      "display_name"  TEXT      DEFAULT NULL,
       "last_update"   TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
       PRIMARY KEY (network_id,port_id)
     ) )",
@@ -109,12 +110,12 @@ DBInterface::DBInterface(std::string_view filename)
     CREATE TABLE IF NOT EXISTS contact (
       "contact_id"    INTEGER NOT NULL PRIMARY KEY,
       "street_number" INTEGER DEFAULT NULL,
-      "street_name"   TEXT DEFAULT NULL,
-      "city"          TEXT DEFAULT NULL,
-      "state"         TEXT DEFAULT NULL,
-      "country"       TEXT DEFAULT NULL,
-      "postal_code"   TEXT DEFAULT NULL,
-      "phone_number"  TEXT DEFAULT NULL,
+      "street_name"   TEXT    DEFAULT NULL,
+      "city"          TEXT    DEFAULT NULL,
+      "state"         TEXT    DEFAULT NULL,
+      "country"       TEXT    DEFAULT NULL,
+      "postal_code"   TEXT    DEFAULT NULL,
+      "phone_number"  TEXT    DEFAULT NULL,
       "URL_id"        INTEGER DEFAULT NULL
     ) )",
 
@@ -169,9 +170,9 @@ DBInterface::DBInterface(std::string_view filename)
         "power_id"  INTEGER NOT NULL PRIMARY KEY,
         "level"     INTEGER NOT NULL,
         "connector" INTEGER DEFAULT NULL,
-        "amp"       REAL DEFAULT NULL,
-        "kW"        REAL DEFAULT NULL,
-        "volt"      REAL DEFAULT NULL
+        "amp"       REAL    DEFAULT NULL,
+        "kW"        REAL    DEFAULT NULL,
+        "volt"      REAL    DEFAULT NULL
       ) )",
 
     R"(
@@ -189,50 +190,10 @@ DBInterface::DBInterface(std::string_view filename)
       )",
 
     R"(
-      CREATE TABLE IF NOT EXISTS hours (
-        "hours_id" INTEGER NOT NULL PRIMARY KEY,
-        "begin" INTEGER NOT NULL,
-        "end" INTEGER NOT NULL
-      ) )",
-
-    R"(
-      CREATE TRIGGER IF NOT EXISTS before_insert_hours
-      BEFORE INSERT ON hours
-      WHEN EXISTS (SELECT 1 FROM hours WHERE
-        NEW.begin IS begin AND
-        NEW.end IS end)
-      BEGIN
-        SELECT RAISE(ABORT,SQLITE_CONSTRAINT_TRIGGER);
-      END
-      )",
-
-    R"(
       CREATE TABLE IF NOT EXISTS schedule (
-        "schedule_id" INTEGER NOT     NULL PRIMARY KEY,
-        "sunday"      INTEGER DEFAULT NULL,
-        "monday"      INTEGER DEFAULT NULL,
-        "tuesday"     INTEGER DEFAULT NULL,
-        "wednesday"   INTEGER DEFAULT NULL,
-        "thursday"    INTEGER DEFAULT NULL,
-        "friday"      INTEGER DEFAULT NULL,
-        "saturday"    INTEGER DEFAULT NULL
+        "schedule_id" INTEGER NOT NULL PRIMARY KEY,
+        "week"        TEXT DEFAULT NULL UNIQUE
       ) )",
-
-    R"(
-      CREATE TRIGGER IF NOT EXISTS before_insert_schedule
-      BEFORE INSERT ON schedule
-      WHEN EXISTS (SELECT 1 FROM schedule WHERE
-        NEW.sunday IS sunday AND
-        NEW.monday IS monday AND
-        NEW.tuesday IS tuesday AND
-        NEW.wednesday IS wednesday AND
-        NEW.thursday IS thursday AND
-        NEW.friday IS friday AND
-        NEW.saturday IS saturday)
-      BEGIN
-        SELECT RAISE(ABORT,SQLITE_CONSTRAINT_TRIGGER);
-      END
-      )",
 
     R"(
       CREATE TABLE IF NOT EXISTS URLs (
@@ -246,6 +207,7 @@ DBInterface::DBInterface(std::string_view filename)
         "name" TEXT NOT NULL
       ) )",
 
+    R"(INSERT OR IGNORE INTO schedule (schedule_id, week) VALUES (1, "0,1439;0,1439;0,1439;0,1439;0,1439;0,1439;0,1439"))",
     R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Non-Networked", 17))",
     R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Unknown", 0))",
     R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("AmpUp", 42))",
@@ -468,7 +430,6 @@ void DBInterface::addContact(const contact_t& contact)
   std::optional<uint64_t> URL_id = identifyURL(contact.URL);
   if(contact)
   {
-    //std::cout << "adding " << contact << std::endl;
     sql::query q = std::move(m_db.build_query("INSERT INTO contact ("
                                                 "street_number,"
                                                 "street_name,"
@@ -752,99 +713,12 @@ power_t DBInterface::getPower(const std::optional<uint64_t> power_id)
   return power;
 }
 
-
-void DBInterface::addHours(const std::optional<schedule_t::hours_t>& hours)
-{
-  if(hours)
-  {
-    sql::query q = std::move(m_db.build_query("INSERT INTO hours ("
-                                                "begin,"
-                                                "end"
-                                              ") VALUES (?1,?2)")
-                             .arg(hours->first)
-                             .arg(hours->second));
-
-    while(!q.execute() && q.lastError() == SQLITE_BUSY);
-    assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_CONSTRAINT_TRIGGER);
-  }
-}
-
-std::optional<uint64_t> DBInterface::identifyHours(const std::optional<schedule_t::hours_t>& hours)
-{
-  std::optional<uint64_t> hours_id;
-  if(hours)
-  {
-    sql::query q = std::move(m_db.build_query("SELECT "
-                                                "hours_id "
-                                              "FROM "
-                                                "hours "
-                                              "WHERE "
-                                                "begin IS ?1 AND "
-                                                "end IS ?2")
-                             .arg(hours->first)
-                             .arg(hours->second));
-
-    while(!q.execute() && q.lastError() == SQLITE_BUSY);
-    assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_ROW);
-
-    MUST(q.fetchRow())
-      q.getField(hours_id);
-  }
-  return hours_id;
-}
-
-std::optional<schedule_t::hours_t> DBInterface::getHours(const std::optional<uint64_t> hours_id)
-{
-  schedule_t::hours_t hours;
-  if(hours_id)
-  {
-    sql::query q = std::move(m_db.build_query("SELECT "
-                                                "begin,"
-                                                "end "
-                                              "FROM "
-                                                "hours "
-                                              "WHERE "
-                                                "hours_id IS ?1")
-                             .arg(hours_id));
-
-    while(!q.execute() && q.lastError() == SQLITE_BUSY);
-    assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_ROW);
-
-    MUST(q.fetchRow())
-      q.getField(hours.first)
-       .getField(hours.second);
-  }
-  return hours;
-}
-
-
 void DBInterface::addSchedule(const schedule_t& schedule)
 {
   if(schedule)
   {
-    std::vector<std::optional<uint64_t>> hours_ids;
-    for(auto& hours : schedule.days)
-    {
-      addHours(hours);
-      hours_ids.push_back(identifyHours(hours));
-    }
-
-    sql::query q = std::move(m_db.build_query("INSERT INTO schedule ("
-                                                "sunday,"
-                                                "monday,"
-                                                "tuesday,"
-                                                "wednesday,"
-                                                "thursday,"
-                                                "friday,"
-                                                "saturday"
-                                              ") VALUES (?1,?2,?3,?4,?5,?6,?7)")
-                             .arg(hours_ids[0])
-                             .arg(hours_ids[1])
-                             .arg(hours_ids[2])
-                             .arg(hours_ids[3])
-                             .arg(hours_ids[4])
-                             .arg(hours_ids[5])
-                             .arg(hours_ids[6]));
+    sql::query q = std::move(m_db.build_query("INSERT INTO schedule (week) VALUES (?1)")
+                             .arg(static_cast<std::string>(schedule)));
 
     while(!q.execute() && q.lastError() == SQLITE_BUSY);
     assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_CONSTRAINT_TRIGGER);
@@ -856,28 +730,13 @@ std::optional<uint64_t> DBInterface::identifySchedule(const schedule_t& schedule
   std::optional<uint64_t> schedule_id;
   if(schedule)
   {
-    std::vector<std::optional<uint64_t>> hours_ids;
-    for(auto& hours : schedule.days)
-      hours_ids.push_back(identifyHours(hours));
     sql::query q = std::move(m_db.build_query("SELECT "
                                                 "schedule_id "
                                               "FROM "
                                                 "schedule "
                                               "WHERE "
-                                                "sunday IS ?1 AND "
-                                                "monday IS ?2 AND "
-                                                "tuesday IS ?3 AND "
-                                                "wednesday IS ?4 AND "
-                                                "thursday IS ?5 AND "
-                                                "friday IS ?6 AND "
-                                                "saturday IS ?7")
-                             .arg(hours_ids[0])
-                             .arg(hours_ids[1])
-                             .arg(hours_ids[2])
-                             .arg(hours_ids[3])
-                             .arg(hours_ids[4])
-                             .arg(hours_ids[5])
-                             .arg(hours_ids[6]));
+                                                "week IS ?1")
+                             .arg(static_cast<std::string>(schedule)));
 
     while(!q.execute() && q.lastError() == SQLITE_BUSY);
     assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_ROW);
@@ -891,18 +750,11 @@ std::optional<uint64_t> DBInterface::identifySchedule(const schedule_t& schedule
 schedule_t DBInterface::getSchedule(const std::optional<uint64_t> schedule_id)
 {
   schedule_t schedule;
-  std::array<std::optional<uint64_t>, 7> hours_ids;
   if(schedule_id)
   {
     schedule.schedule_id = schedule_id;
     sql::query q = std::move(m_db.build_query("SELECT "
-                                                "sunday,"
-                                                "monday,"
-                                                "tuesday,"
-                                                "wednesday,"
-                                                "thursday,"
-                                                "friday,"
-                                                "saturday "
+                                                "week"
                                               "FROM "
                                                 "schedule "
                                               "WHERE "
@@ -912,33 +764,14 @@ schedule_t DBInterface::getSchedule(const std::optional<uint64_t> schedule_id)
     while(!q.execute() && q.lastError() == SQLITE_BUSY);
     assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_ROW);
 
+    std::string tmpstr;
     MUST(q.fetchRow())
-      q.getField(hours_ids[0])
-       .getField(hours_ids[1])
-       .getField(hours_ids[2])
-       .getField(hours_ids[3])
-       .getField(hours_ids[4])
-       .getField(hours_ids[5])
-       .getField(hours_ids[6]);
+      q.getField(tmpstr);
+    schedule = tmpstr;
   }
-
-  for(size_t i = 0; i < hours_ids.size(); ++i)
-    schedule.days[i] = getHours(hours_ids[i]);
 
   return schedule;
 }
-
-// from https://stackoverflow.com/a/12883767/454237
-template<int digit>
-constexpr double precision(double x)
-{
-  if (x == 0.f)
-    return x;
-  int ex = std::floor(std::log10(std::abs(x))) - digit + 1;
-  double div = std::pow(10, ex);
-  return std::floor(x / div + 0.5) * div;
-}
-
 
 void DBInterface::addPort(port_t& port)
 {
@@ -1003,32 +836,6 @@ port_t DBInterface::getPort(Network network_id, const std::string& port_id)
   port.price = getPrice(port.price.price_id);
   return port;
 }
-#if 0
-bool DBInterface::isStation(Network network_id, const std::string& station_id)
-{
-  bool found = false;
-  try
-  {
-    sql::query q = std::move(m_db.build_query("SELECT 1 FROM "
-                                                "stations "
-                                              "WHERE "
-                                                "network_id IS ?1 AND "
-                                                "station_id IS ?2")
-                             .arg(network_id)
-                             .arg(station_id));
-
-    while(!q.execute() && q.lastError() == SQLITE_BUSY);
-    assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_ROW);
-
-    found = q.fetchRow();
-  }
-  catch(std::string& error)
-  {
-    std::cerr << "sql error: " << error << std::endl;
-  }
-  return found;
-}
-#endif
 
 void DBInterface::addStation(station_t& station)
 {
@@ -1060,6 +867,10 @@ void DBInterface::addStation(station_t& station)
       contact.contact_id = identifyContact(contact);
       station.contact = contact;
     }
+
+    std::optional<std::string> schedule;
+    if(station.schedule)
+      schedule = station.schedule;
 
     if(station.price) // sync price structs
     {
@@ -1136,6 +947,8 @@ station_t DBInterface::getStation(sql::query&& q)
 
     for(const auto& port_id : port_ids.split_string({','}))
       station.ports.emplace_back(getPort(*station.network_id, port_id));
+
+
 
     station.contact = getContact(station.contact.contact_id);
     station.schedule = getSchedule(station.schedule.schedule_id);
