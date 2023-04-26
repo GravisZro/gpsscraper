@@ -721,7 +721,7 @@ void DBInterface::addSchedule(const schedule_t& schedule)
                              .arg(static_cast<std::string>(schedule)));
 
     while(!q.execute() && q.lastError() == SQLITE_BUSY);
-    assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_CONSTRAINT_TRIGGER);
+    assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_CONSTRAINT_UNIQUE);
   }
 }
 
@@ -754,7 +754,7 @@ schedule_t DBInterface::getSchedule(const std::optional<uint64_t> schedule_id)
   {
     schedule.schedule_id = schedule_id;
     sql::query q = std::move(m_db.build_query("SELECT "
-                                                "week"
+                                                "week "
                                               "FROM "
                                                 "schedule "
                                               "WHERE "

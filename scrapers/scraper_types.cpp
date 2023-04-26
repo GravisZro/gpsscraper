@@ -155,9 +155,10 @@ schedule_t& schedule_t::operator =(const std::string& input)
   {
     auto comma = dayofweek.find_first_of(',');
     days[daynum].reset();
-    if(comma == std::string::npos)
-      days[daynum].emplace(ext::from_string<int32_t>(dayofweek.substr(0, comma - 1)),
+    if(comma != std::string::npos)
+      days[daynum].emplace(ext::from_string<int32_t>(dayofweek.substr(0, comma)),
                            ext::from_string<int32_t>(dayofweek.substr(comma + 1)));
+    ++daynum;
   }
   return *this;
 }
