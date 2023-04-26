@@ -72,7 +72,7 @@ namespace ext
 
     size_t last_occurence(const std::set<char>& targets, size_t pos = std::string::npos) const noexcept;
     size_t first_occurence(const std::set<char>& targets, size_t pos = std::string::npos) const noexcept;
-    std::list<std::string> split_string(const std::set<char>& splitters) const noexcept;
+    std::list<string> split_string(const std::set<char>& splitters) const noexcept;
     string& list_append(const char deliminator, const std::string& item);
 
     size_t find_before_or_throw(const std::string& other, size_t pos, int throw_value) const;

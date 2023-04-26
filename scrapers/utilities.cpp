@@ -146,9 +146,9 @@ namespace ext
     return last;
   }
 
-  std::list<std::string> string::split_string(const std::set<char>& splitters) const noexcept
+  std::list<string> string::split_string(const std::set<char>& splitters) const noexcept
   {
-    std::list<std::string> rlist;
+    std::list<string> rlist;
     size_t offset = 0, end = 0;
 
     while(end = first_occurence(splitters, offset),
