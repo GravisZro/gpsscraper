@@ -175,11 +175,9 @@ int main(int argc, char* argv[])
         for(;!main_queue.empty(); main_queue.pop_front())
         {
           auto& pos = main_queue.front();
-          //std::clog << "queue size: " << main_queue.size() << std::endl;
+          std::cout << "queue size: " << main_queue.size() << std::endl;
 
-
-          if(static_cast<typename std::underlying_type_t<Parser>>(pos.query.parser) &
-             static_cast<typename std::underlying_type_t<Parser>>(Parser::BuildQuery))
+          if((pos.query.parser & Parser::BuildQuery) == Parser::BuildQuery)
           {
             pos = scraper->BuildQuery(pos);
           }
