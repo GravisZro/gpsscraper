@@ -43,8 +43,8 @@ namespace ext
     using std::string::substr;
     //using std::string::erase;
 
-    string(const std::string&& other) : std::string(other){}
-    string(const std::string& other) : std::string(other){}
+    string(const std::string&& other) : std::string(other) {}
+    string(const std::string&  other) : std::string(other) {}
 
     template<int base = 10>
     bool is_number(void) const noexcept;
@@ -59,7 +59,7 @@ namespace ext
       { return substr(pos, end - pos); }
 
     size_t erase(const std::string& other) noexcept;
-    void replace(const std::string& other, const std::string& replacement) noexcept;
+    bool replace(const std::string& other, const std::string& replacement) noexcept;
     void erase_before(std::string target, size_t pos = 0) noexcept;
     void erase_at(std::string target, size_t pos = 0) noexcept;
     void erase(const std::set<char>& targets) noexcept;
@@ -82,6 +82,12 @@ namespace ext
     size_t rfind_before_or_throw(const std::string& other, size_t pos, int throw_value) const;
     size_t rfind_after_or_throw(const std::string& other, size_t pos, int throw_value) const;
     size_t rfind_after(const std::string& other, size_t pos = 0) const noexcept;
+
+    template<typename T> string arg(const T& data) const noexcept;
+  private:
+    string(const std::string&  other, int argnum) : std::string(other), m_argnum(argnum + 1) {}
+    string(const std::string&& other, int argnum) : std::string(other), m_argnum(argnum + 1) {}
+    std::optional<int> m_argnum;
   };
 }
 
@@ -429,16 +435,18 @@ constexpr bool operator ==(enum_type a, enum_type b)
 
 
 template<typename enum_type, std::enable_if_t<std::is_scoped_enum_v<enum_type>, bool> = true>
-constexpr std::underlying_type_t<enum_type> operator |=(enum_type a, typename std::underlying_type_t<enum_type> b)
-  { return static_cast<typename std::underlying_type_t<enum_type>>(a) | b; }
+constexpr enum_type operator |=(enum_type& a, typename std::underlying_type_t<enum_type> b)
+  { return a = static_cast<enum_type>(static_cast<typename std::underlying_type_t<enum_type>>(a) | b); }
 
 template<typename enum_type, std::enable_if_t<std::is_scoped_enum_v<enum_type>, bool> = true>
-constexpr std::underlying_type_t<enum_type> operator |=(enum_type a, enum_type b)
-  { return static_cast<typename std::underlying_type_t<enum_type>>(a) | static_cast<typename std::underlying_type_t<const enum_type>>(b); }
+constexpr enum_type operator |=(enum_type& a, enum_type b)
+  { return a = static_cast<enum_type>(static_cast<typename std::underlying_type_t<enum_type>>(a) |
+                                      static_cast<typename std::underlying_type_t<enum_type>>(b)); }
 
 template<typename enum_type, std::enable_if_t<std::is_scoped_enum_v<enum_type>, bool> = true>
-constexpr std::underlying_type_t<enum_type> operator |(enum_type a, typename std::underlying_type_t<enum_type> b)
-  { return static_cast<typename std::underlying_type_t<enum_type>>(a) | b; }
+constexpr enum_type operator |(enum_type a, typename std::underlying_type_t<enum_type> b)
+  { return static_cast<enum_type>(
+        static_cast<typename std::underlying_type_t<enum_type>>(a) | b); }
 
 template<typename enum_type, std::enable_if_t<std::is_scoped_enum_v<enum_type>, bool> = true>
 constexpr enum_type operator |(enum_type a, enum_type b)

@@ -40,6 +40,19 @@ namespace ext
   template<> long double from_string(const std::string& str, size_t* pos)
     { return std::stold(str, pos); }
 
+
+  template<> string string::arg(const std::string& data) const noexcept
+  {
+    int argnum = 0;
+    if(m_argnum)
+      argnum = *m_argnum;
+    string rval(*this, argnum);
+    std::string placeholder = "%0";
+    placeholder.at(1) += argnum;
+    while(rval.replace(placeholder, data));
+    return rval;
+  }
+
   template<>
   bool string::is_number<10>(void) const noexcept
   {
@@ -62,11 +75,12 @@ namespace ext
     return offset;
   }
 
-  void string::replace(const std::string& other, const std::string& replacement) noexcept
+  bool string::replace(const std::string& other, const std::string& replacement) noexcept
   {
     size_t offset = erase(other);
     if(offset != std::string::npos)
       insert(offset, replacement);
+    return offset != std::string::npos;
   }
 
   void string::erase_before(std::string target, size_t pos) noexcept
@@ -222,4 +236,3 @@ namespace ext
     return offset;
   }
 }
-
