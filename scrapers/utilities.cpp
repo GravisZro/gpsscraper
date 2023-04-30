@@ -41,7 +41,7 @@ namespace ext
     { return std::stold(str, pos); }
 
 
-  template<> string string::arg(const std::string& data) const noexcept
+  string string::arg(const std::string& data) const noexcept
   {
     int argnum = 0;
     if(m_argnum)

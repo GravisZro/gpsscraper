@@ -83,7 +83,14 @@ namespace ext
     size_t rfind_after_or_throw(const std::string& other, size_t pos, int throw_value) const;
     size_t rfind_after(const std::string& other, size_t pos = 0) const noexcept;
 
-    template<typename T> string arg(const T& data) const noexcept;
+    string arg(const std::string& data) const noexcept;
+
+    template<typename T, std::enable_if_t<std::is_integral_v<T>, bool> = true>
+    string arg(T data, int base = 10) const noexcept { return arg(std::to_string(data, base)); }
+
+    template<typename T, std::enable_if_t<std::is_floating_point_v<T>, bool> = true>
+    string arg(T data) const noexcept { return arg(std::to_string(data)); }
+
   private:
     string(const std::string&  other, int argnum) : std::string(other), m_argnum(argnum + 1) {}
     string(const std::string&& other, int argnum) : std::string(other), m_argnum(argnum + 1) {}
