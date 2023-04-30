@@ -135,30 +135,36 @@ void contact_t::incorporate(const contact_t& o)
 // === operation_schedule_t ===
 
 schedule_t::operator std::string(void) const
-{
-  std::string out;
-  for(const auto& dayofweek : days)
-  {
-    if(!out.empty())
-      out.push_back(';');
-    if(dayofweek)
-      out += std::to_string(dayofweek->first) + "," +
-             std::to_string(dayofweek->second);
-  }
+{  
+  std::string out = raw_string;
+  if(out.empty())
+    for(int daynum = 0; const auto& dayofweek : days)
+    {
+      if(daynum++)
+        out.push_back(';');
+      if(dayofweek)
+        out += std::to_string(dayofweek->first) + "," +
+               std::to_string(dayofweek->second);
+    }
   return out;
 }
 
 schedule_t& schedule_t::operator =(const std::string& input)
 {
-  int daynum = 0;
-  for(const auto& dayofweek : ext::string(input).split_string({';'}))
+  raw_string.clear();
+  if(std::any_of(std::begin(input), std::end(input), [](const char c) { return std::isalpha(c); } ))
+     raw_string = input;
+  else
   {
-    auto comma = dayofweek.find_first_of(',');
-    days[daynum].reset();
-    if(comma != std::string::npos)
-      days[daynum].emplace(ext::from_string<int32_t>(dayofweek.substr(0, comma)),
-                           ext::from_string<int32_t>(dayofweek.substr(comma + 1)));
-    ++daynum;
+    for(int daynum = 0; const auto& dayofweek : ext::string(input).split_string({';'}))
+    {
+      auto comma = dayofweek.find_first_of(',');
+      days[daynum].reset();
+      if(comma != std::string::npos)
+        days[daynum].emplace(ext::from_string<int32_t>(dayofweek.substr(0, comma)),
+                             ext::from_string<int32_t>(dayofweek.substr(comma + 1)));
+      ++daynum;
+    }
   }
   return *this;
 }
@@ -226,10 +232,14 @@ std::ostream & operator << (std::ostream &out, const Unit value) noexcept
 {
   switch(value)
   {
-    case Unit::WattHours: out << "WattHours"; break;
+    case Unit::Unknown:       out << "Unknown"; break;
+    case Unit::Free:          out << "Free"; break;
+    case Unit::Session:       out << "Session"; break;
+    case Unit::Hours:         out << "Hours"; break;
     case Unit::KilowattHours: out << "KilowattHours"; break;
-    case Unit::Minutes: out << "Minutes"; break;
-    case Unit::Hours: out << "Hours"; break;
+    case Unit::SeeText:       out << "SeeText"; break;
+    case Unit::Minutes:       out << "Minutes"; break;
+    case Unit::WattHours:     out << "WattHours"; break;
   }
   return out;
 }

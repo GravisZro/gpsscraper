@@ -22,13 +22,17 @@ enum class Connector : uint8_t
   CCS1      = 0x10,
   CCS2      = 0x20,
   Tesla     = 0x40,
+  Pair      = 0x80,
 };
 
 enum class Status : uint8_t
 {
-  Broken = 0,
-  Operational,
-  InUse,
+  Unknown = 0,  // status unknown
+  Operational,  // availible for use
+  InUse,        // currently in use
+  InMaintaince, // being repaired
+  Broken,       // broken
+  PlannedSite,  // doesn't exist yet
 };
 
 enum class Network : uint8_t
@@ -96,31 +100,32 @@ enum class Network : uint8_t
 enum class Parser : uint8_t
 {
   Discard = 0x00,
-  Complete,
   Port,
   Station,
   MapArea,
   Initial,
+  Complete,
   BuildQuery = 0x10,
-  BuildComplete,
   BuildPort,
   BuildStation,
   BuildMapArea,
   BuildInitial,
   ReplaceRecord = 0x20,
-  ReplaceComplete,
   ReplacePort,
   ReplaceStation,
   ReplaceMapArea,
-  ReplaceInitial,
 };
 
 enum class Unit : uint8_t
 {
-  WattHours = 0,
-  KilowattHours,
-  Minutes,
+  Unknown = 0,
+  Free,
+  Session,
   Hours,
+  KilowattHours,
+  SeeText,
+  WattHours,
+  Minutes,
 };
 
 enum class Currency : uint8_t
@@ -276,6 +281,7 @@ struct schedule_t
 
   std::optional<uint64_t> schedule_id; // ignored in functions
   std::array<std::optional<hours_t>, 7> days;
+  std::string raw_string;
 
   operator std::string(void) const;
   schedule_t& operator =(const std::string& input);
@@ -288,7 +294,6 @@ struct schedule_t
 
 struct port_t
 {
-  port_t(void) : weird(false) { }
   std::optional<Network>  network_id;
   std::optional<std::string> station_id;
   std::optional<std::string> port_id;
@@ -298,7 +303,6 @@ struct port_t
   contact_t contact;
   price_t price;
   std::optional<std::string> display_name;
-  bool weird;
 
   bool operator ==(const port_t& o) const { return port_id == o.port_id; }
   bool operator <(const port_t& o) const { return port_id < o.port_id; }
