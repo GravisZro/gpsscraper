@@ -433,38 +433,43 @@ namespace std
 #endif
 
 
-// add operations for scoped enumberations
-/*
-template<typename enum_type, std::enable_if_t<std::is_scoped_enum_v<enum_type>, bool> = true>
-constexpr bool operator ==(enum_type a, enum_type b)
-  { return std::underlying_type_t<enum_type>(a) == std::underlying_type_t<enum_type>(b); }
-*/
-
-
+// operators for scoped enumerations
+// high level operators
 template<typename enum_type, std::enable_if_t<std::is_scoped_enum_v<enum_type>, bool> = true>
 constexpr enum_type operator |=(enum_type& a, typename std::underlying_type_t<enum_type> b)
-  { return a = static_cast<enum_type>(static_cast<typename std::underlying_type_t<enum_type>>(a) | b); }
+  { return a = a | b; }
 
 template<typename enum_type, std::enable_if_t<std::is_scoped_enum_v<enum_type>, bool> = true>
 constexpr enum_type operator |=(enum_type& a, enum_type b)
-  { return a = static_cast<enum_type>(static_cast<typename std::underlying_type_t<enum_type>>(a) |
-                                      static_cast<typename std::underlying_type_t<enum_type>>(b)); }
+  { return a = a | b; }
 
 template<typename enum_type, std::enable_if_t<std::is_scoped_enum_v<enum_type>, bool> = true>
-constexpr enum_type operator |(enum_type a, typename std::underlying_type_t<enum_type> b)
-  { return static_cast<enum_type>(
-        static_cast<typename std::underlying_type_t<enum_type>>(a) | b); }
+constexpr enum_type operator &=(enum_type& a, typename std::underlying_type_t<enum_type> b)
+  { return a = a & b; }
 
+template<typename enum_type, std::enable_if_t<std::is_scoped_enum_v<enum_type>, bool> = true>
+constexpr enum_type operator &=(enum_type& a, enum_type b)
+  { return a = a & b; }
+
+// helper operators
+template<typename enum_type, std::enable_if_t<std::is_scoped_enum_v<enum_type>, bool> = true>
+constexpr enum_type operator |(enum_type a, typename std::underlying_type_t<enum_type> b)
+  { return a | static_cast<enum_type>(b); }
+
+template<typename enum_type, std::enable_if_t<std::is_scoped_enum_v<enum_type>, bool> = true>
+constexpr enum_type operator &(enum_type a, typename std::underlying_type_t<enum_type> b)
+  { return a & static_cast<enum_type>(b); }
+
+// lowest level operators
 template<typename enum_type, std::enable_if_t<std::is_scoped_enum_v<enum_type>, bool> = true>
 constexpr enum_type operator |(enum_type a, enum_type b)
   { return static_cast<enum_type>(
             static_cast<typename std::underlying_type_t<enum_type>>(a) |
             static_cast<typename std::underlying_type_t<enum_type>>(b)); }
 
-
 template<typename enum_type, std::enable_if_t<std::is_scoped_enum_v<enum_type>, bool> = true>
-constexpr std::underlying_type_t<enum_type> operator &(enum_type a, enum_type b)
-  { return static_cast<typename std::underlying_type_t<enum_type>>(a) &
-           static_cast<typename std::underlying_type_t<enum_type>>(b); }
+constexpr enum_type operator &(enum_type a, enum_type b)
+  { return static_cast<enum_type>(static_cast<typename std::underlying_type_t<enum_type>>(a) &
+                                  static_cast<typename std::underlying_type_t<enum_type>>(b)); }
 
 #endif // UTILITIES_H
