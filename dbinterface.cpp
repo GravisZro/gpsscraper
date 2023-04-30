@@ -207,7 +207,7 @@ DBInterface::DBInterface(std::string_view filename)
         "name" TEXT NOT NULL
       ) )",
 
-    R"(INSERT OR IGNORE INTO schedule (schedule_id, week) VALUES (1, "0,1439;0,1439;0,1439;0,1439;0,1439;0,1439;0,1439"))",
+    R"(INSERT OR IGNORE INTO schedule (schedule_id, week) VALUES (1, "0,1440;0,1440;0,1440;0,1440;0,1440;0,1440;0,1440"))",
     R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Non-Networked", 17))",
     R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Unknown", 0))",
     R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("AmpUp", 42))",
