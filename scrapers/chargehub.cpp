@@ -550,10 +550,11 @@ std::vector<pair_data_t> ChargehubScraper::ParseStation(const pair_data_t& data,
          nodeL1.idFloat("Long", nd.station.location.longitude) ||
          nodeL1.idString("Phone", nd.station.contact.phone_number) ||
          nodeL1.idString("Web", nd.station.contact.URL) ||
-         nodeL1.idEnum("NetworkId", nd.station.network_id) ||
          nodeL1.idString("PriceString", nd.station.price.text))
       {
       }
+      else if(nodeL1.idEnum("NetworkId", nd.station.network_id))
+        *nd.station.network_id |= Network::ChargeHub;
       else if(nodeL1.idString("AccessTime", tmpstr))
       {
         nd.station.schedule = process_schedule(tmpstr);
