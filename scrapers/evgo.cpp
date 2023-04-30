@@ -70,23 +70,24 @@ pair_data_t EVGoScraper::BuildQuery(const pair_data_t& input) const
     {
       data.query.parser = Parser::MapArea;
       data.query.URL = "https://account.evgo.com/stationFacade/findSitesInBounds";
-      ext::string post_data =
-          R"(
-          {
-            "filterByIsManaged": true,
-            "filterByBounds":
+      auto post_data =
+          ext::string(
+            R"(
             {
-              "northEastLat": %1,
-              "northEastLng": %2,
-              "southWestLat": %3,
-              "southWestLng": %4
-            }
-          })";
+              "filterByIsManaged": true,
+              "filterByBounds":
+              {
+                "northEastLat": %0,
+                "northEastLng": %1,
+                "southWestLat": %2,
+                "southWestLng": %3
+              }
+            })")
+          .arg(input.query.bounds.northEast().latitude)
+          .arg(input.query.bounds.northEast().longitude)
+          .arg(input.query.bounds.southWest().latitude)
+          .arg(input.query.bounds.southWest().longitude);
       post_data.erase(std::set<char>{'\n',' '});
-      post_data.replace("%1", std::to_string(input.query.bounds.northEast().latitude));
-      post_data.replace("%2", std::to_string(input.query.bounds.northEast().longitude));
-      post_data.replace("%3", std::to_string(input.query.bounds.southWest().latitude));
-      post_data.replace("%4", std::to_string(input.query.bounds.southWest().longitude));
       data.query.post_data = post_data;
       data.query.header_fields = { { "Content-Type", "application/json" } };
       break;

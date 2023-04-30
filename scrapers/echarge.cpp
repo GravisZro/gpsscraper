@@ -25,34 +25,36 @@ pair_data_t EchargeScraper::BuildQuery(const pair_data_t& input) const
     {
       data.query.parser = Parser::MapArea;
       data.query.URL= "https://account.echargenetwork.com/api/network/markers";
-      ext::string post_data =
-          R"(
-          {
-            "FilteringOptions":
+      auto post_data =
+          ext::string(
+            R"(
             {
-              "AvailableStationsOnly":false,
-              "FastDCStationsOnly":false,
-              "ShowOtherNetworkStations":true
-            },
-            "Bounds":
-            {
-              "SouthWest":
+              "FilteringOptions":
               {
-                "Lat":%1,
-                "Lng":%2
+                "AvailableStationsOnly":false,
+                "FastDCStationsOnly":false,
+                "ShowOtherNetworkStations":true
               },
-              "NorthEast":
+              "Bounds":
               {
-                "Lat":%3,
-                "Lng":%4
+                "SouthWest":
+                {
+                  "Lat":%0,
+                  "Lng":%1
+                },
+                "NorthEast":
+                {
+                  "Lat":%2,
+                  "Lng":%3
+                }
               }
-            }
-          })";
+            })")
+          .arg(input.query.bounds.southWest().latitude)
+          .arg(input.query.bounds.southWest().longitude)
+          .arg(input.query.bounds.northEast().latitude)
+          .arg(input.query.bounds.northEast().longitude);
       post_data.erase(std::set<char>{'\n',' '});
-      post_data.replace("%1", std::to_string(input.query.bounds.southWest().latitude));
-      post_data.replace("%2", std::to_string(input.query.bounds.southWest().longitude));
-      post_data.replace("%3", std::to_string(input.query.bounds.northEast().latitude));
-      post_data.replace("%4", std::to_string(input.query.bounds.northEast().longitude));
+
       std::cout << post_data << std::endl;
 
       data.query.post_data = post_data;
