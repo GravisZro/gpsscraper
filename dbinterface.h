@@ -16,31 +16,28 @@ public:
   ~DBInterface(void);
 
   void addMapLocation(const pair_data_t& data);
-  void addURL     (const std::optional<std::string>& URL);
+  void addUniqueString(const std::optional<std::string>& string);
   void addContact (const contact_t& contact);
   void addPrice   (const price_t& price);
   void addPower   (const power_t& power);
-  void addSchedule(const schedule_t& schedule);
   void addPort    (port_t& port); // fills in port.power.power_id and port.price.price_id
   void addStation (station_t& station); // fills in station.ports[].port_id and station.schedule.schedule_id
 
   std::optional<std::string> identifyMapLocation(const pair_data_t& data);
-  std::optional<uint64_t> identifyURL(const std::optional<std::string>& URL);
+  std::optional<uint64_t> identifyUniqueString(const std::optional<std::string>& string);
   std::optional<uint64_t> identifyContact(const contact_t& contact);
   std::optional<uint64_t> identifyPrice(const price_t& price);
   std::optional<uint64_t> identifyPower(const power_t& power);
-  std::optional<uint64_t> identifySchedule(const schedule_t& schedule);
 
   std::optional<pair_data_t> getMapLocation(Network network_id, const std::string& node_id);
-  std::optional<std::string> getURL(const std::optional<uint64_t> URL_id);
+  std::optional<std::string> getUniqueString(const std::optional<uint64_t> string_id);
   contact_t getContact(const std::optional<uint64_t> contact_id);
   price_t getPrice(const std::optional<uint64_t> price_id);
   power_t getPower(const std::optional<uint64_t> power_id);
-  schedule_t getSchedule(const std::optional<uint64_t> schedule_id);
   port_t getPort(Network network_id, const std::string& port_id);
   station_t getStation(uint64_t contact_id);
   station_t getStation(Network network_id, const std::string& station_id);
-  station_t getStation(double latitude, double longitude);
+  station_t getStation(coords_t location);
 
 private:
   station_t getStation(sql::query&& q);

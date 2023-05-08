@@ -3,6 +3,7 @@
 // STL
 #include <iostream>
 #include <algorithm>
+#include <functional>
 #include <utility>
 #include <vector>
 #include <cassert>
@@ -16,12 +17,32 @@
 # define MUST(x) assert(x);
 #endif
 
+#define quoted(x) #x
+#define insert_unique_string(name, value) \
+  "INSERT OR IGNORE INTO unique_strings (string, string_id) VALUES (" #name ", " #value ")"
+
+
+std::optional<std::string> to_optional(const std::string& input)
+{
+  if(input.empty())
+    return {};
+  return { input };
+}
+
 DBInterface::DBInterface(std::string_view filename)
 {
   assert(m_db.open(filename));
 
   const std::list<std::string_view> init_commands =
   {
+#if 1
+    "DROP TABLE IF EXISTS stations",
+    "DROP TABLE IF EXISTS ports",
+    "DROP TABLE IF EXISTS contacts",
+    "DROP TABLE IF EXISTS price",
+    "DROP TABLE IF EXISTS power",
+    "DROP TABLE IF EXISTS unique_strings",
+#endif
     "PRAGMA synchronous = OFF",
     "PRAGMA journal_mode = MEMORY",
 
@@ -78,26 +99,28 @@ DBInterface::DBInterface(std::string_view filename)
 
     R"(
     CREATE TABLE IF NOT EXISTS stations (
-      "network_id"    INTEGER NOT NULL,
-      "station_id"    TEXT NOT NULL,
-      "latitude"      REAL NOT NULL CHECK (latitude  >  -90.0 AND latitude  <  90.0),
-      "longitude"     REAL NOT NULL CHECK (longitude > -180.0 AND longitude < 180.0),
-      "name"          TEXT      DEFAULT NULL,
-      "description"   TEXT      DEFAULT NULL,
-      "access_public" BOOLEAN   DEFAULT NULL,
-      "restrictions"  TEXT      DEFAULT NULL,
-      "contact_id"    INTEGER   DEFAULT NULL,
-      "schedule_id"   INTEGER   DEFAULT NULL,
-      "port_ids"      TEXT NOT NULL,
-      "last_update"   TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+      "meta_network_ids"  TEXT      DEFAULT NULL,
+      "meta_station_ids"  TEXT      DEFAULT NULL,
+      "network_id"        INTEGER   NOT     NULL,
+      "station_id"        TEXT      DEFAULT NULL,
+      "latitude"          REAL      NOT     NULL CHECK (latitude  >  -90.0 AND latitude  <  90.0),
+      "longitude"         REAL      NOT     NULL CHECK (longitude > -180.0 AND longitude < 180.0),
+      "name"              TEXT      DEFAULT NULL,
+      "description"       TEXT      DEFAULT NULL,
+      "access_public"     BOOLEAN   DEFAULT NULL,
+      "restrictions"      TEXT      DEFAULT NULL,
+      "contact_id"        INTEGER   DEFAULT NULL,
+      "schedule_id"       INTEGER   DEFAULT NULL,
+      "port_ids"          TEXT      NOT     NULL,
+      "last_update"       TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
       PRIMARY KEY (latitude, longitude)
     ) )",
 
     R"(
     CREATE TABLE IF NOT EXISTS ports (
-      "network_id"    INTEGER NOT NULL,
-      "port_id"       TEXT NOT NULL,
-      "station_id"    TEXT NOT NULL,
+      "network_id"    INTEGER   NOT NULL,
+      "port_id"       TEXT      NOT NULL,
+      "station_id"    TEXT      DEFAULT NULL,
       "power_id"      INTEGER   DEFAULT NULL,
       "price_id"      INTEGER   DEFAULT NULL,
       "status"        INTEGER   DEFAULT NULL,
@@ -115,7 +138,7 @@ DBInterface::DBInterface(std::string_view filename)
       "state"         TEXT    DEFAULT NULL,
       "country"       TEXT    DEFAULT NULL,
       "postal_code"   TEXT    DEFAULT NULL,
-      "phone_number"  TEXT    DEFAULT NULL,
+      "phone_id"      INTEGER DEFAULT NULL,
       "URL_id"        INTEGER DEFAULT NULL
     ) )",
 
@@ -129,7 +152,7 @@ DBInterface::DBInterface(std::string_view filename)
         NEW.state IS state AND
         NEW.country IS country AND
         NEW.postal_code IS postal_code AND
-        NEW.phone_number IS phone_number AND
+        NEW.phone_id IS phone_id AND
         NEW.URL_id IS URL_id)
       BEGIN
         SELECT RAISE(ABORT,SQLITE_CONSTRAINT_TRIGGER);
@@ -189,81 +212,72 @@ DBInterface::DBInterface(std::string_view filename)
       END
       )",
 
-    R"(
-      CREATE TABLE IF NOT EXISTS schedule (
-        "schedule_id" INTEGER NOT NULL PRIMARY KEY,
-        "week"        TEXT DEFAULT NULL UNIQUE
-      ) )",
 
     R"(
-      CREATE TABLE IF NOT EXISTS URLs (
-        "URL_id" INTEGER NOT NULL PRIMARY KEY,
-        "URL" TEXT NOT NULL UNIQUE
+      CREATE TABLE IF NOT EXISTS unique_strings (
+        "string_id" INTEGER NOT NULL PRIMARY KEY,
+        "string" TEXT NOT NULL UNIQUE
       ) )",
 
-    R"(
-      CREATE TABLE IF NOT EXISTS networks (
-        "network_id" INTEGER NOT NULL PRIMARY KEY,
-        "name" TEXT NOT NULL
-      ) )",
-
-    R"(INSERT OR IGNORE INTO schedule (schedule_id, week) VALUES (1, "0,1440;0,1440;0,1440;0,1440;0,1440;0,1440;0,1440"))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Non-Networked", 17))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Unknown", 0))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("AmpUp", 42))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Astria", 15))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Azra", 14))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("BC Hydro EV", 27))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Blink", 1))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("ChargeLab", 31))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("ChargePoint", 2))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Circuit Électrique", 4))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("CityVitae", 52))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Co-op Connect", 47))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("eCharge", 23))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("EcoCharge", 37))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Electrify America", 26))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Electrify Canada", 36))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("EV Link", 18))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("EV Range", 54))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("EVConnect", 22))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("EVCS", 43))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("EVduty", 20))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("evGateway", 44))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("EVgo", 8))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("EVMatch", 35))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("EVolve NY", 38))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("EVSmart", 45))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Flash", 59))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Flo", 3))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("FPL Evolution", 41))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Francis Energy", 39))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("GE", 16))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Go Station", 48))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Hypercharge", 49))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Ivy", 34))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Livingston Energy", 46))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("myEVroute", 21))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("NL Hydro", 53))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Noodoe EV", 30))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("OK2Charge", 55))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("On the Run", 58))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("OpConnect", 9))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Petro-Canada", 32))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("PHI", 50))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Powerflex", 40))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("RED E", 60))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Rivian", 51))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("SemaConnect", 5))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Shell Recharge", 6))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Sun Country Highway", 11))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("SWTCH", 28))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("SYNC EV", 33))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Tesla", 12))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Universal", 56))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Voita", 19))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("Webasto", 7))",
-    R"(INSERT OR IGNORE INTO networks (name, network_id) VALUES ("ZEF Energy", 25))",
+    insert_unique_string("Non-Networked", 17),
+    insert_unique_string("Unknown", 0),
+    insert_unique_string("AmpUp", 42),
+    insert_unique_string("Astria", 15),
+    insert_unique_string("Azra", 14),
+    insert_unique_string("BC Hydro EV", 27),
+    insert_unique_string("Blink", 1),
+    insert_unique_string("ChargeLab", 31),
+    insert_unique_string("ChargePoint", 2),
+    insert_unique_string("Circuit Électrique", 4),
+    insert_unique_string("CityVitae", 52),
+    insert_unique_string("Co-op Connect", 47),
+    insert_unique_string("eCharge", 23),
+    insert_unique_string("EcoCharge", 37),
+    insert_unique_string("Electrify America", 26),
+    insert_unique_string("Electrify Canada", 36),
+    insert_unique_string("EV Link", 18),
+    insert_unique_string("EV Range", 54),
+    insert_unique_string("EVConnect", 22),
+    insert_unique_string("EVCS", 43),
+    insert_unique_string("EVduty", 20),
+    insert_unique_string("evGateway", 44),
+    insert_unique_string("EVgo", 8),
+    insert_unique_string("EVMatch", 35),
+    insert_unique_string("EVolve NY", 38),
+    insert_unique_string("EVSmart", 45),
+    insert_unique_string("Flash", 59),
+    insert_unique_string("Flo", 3),
+    insert_unique_string("FPL Evolution", 41),
+    insert_unique_string("Francis Energy", 39),
+    insert_unique_string("GE", 16),
+    insert_unique_string("Go Station", 48),
+    insert_unique_string("Hypercharge", 49),
+    insert_unique_string("Ivy", 34),
+    insert_unique_string("Livingston Energy", 46),
+    insert_unique_string("myEVroute", 21),
+    insert_unique_string("NL Hydro", 53),
+    insert_unique_string("Noodoe EV", 30),
+    insert_unique_string("OK2Charge", 55),
+    insert_unique_string("On the Run", 58),
+    insert_unique_string("OpConnect", 9),
+    insert_unique_string("Petro-Canada", 32),
+    insert_unique_string("PHI", 50),
+    insert_unique_string("Powerflex", 40),
+    insert_unique_string("RED E", 60),
+    insert_unique_string("Rivian", 51),
+    insert_unique_string("SemaConnect", 5),
+    insert_unique_string("Shell Recharge", 6),
+    insert_unique_string("Sun Country Highway", 11),
+    insert_unique_string("SWTCH", 28),
+    insert_unique_string("SYNC EV", 33),
+    insert_unique_string("Tesla", 12),
+    insert_unique_string("Universal", 56),
+    insert_unique_string("Voita", 19),
+    insert_unique_string("Webasto", 7),
+    insert_unique_string("ZEF Energy", 25),
+    insert_unique_string("ChargeHub", 100),
+    insert_unique_string("Eptix", 101),
+    insert_unique_string("0,1440;0,1440;0,1440;0,1440;0,1440;0,1440;0,1440", 110),
   };
 
   for(const auto& command : init_commands)
@@ -272,6 +286,7 @@ DBInterface::DBInterface(std::string_view filename)
     {
       std::cerr << "SQL command failed:" << std::endl
                 << command << std::endl;
+      //m_db.clearError();
       assert(false);
     }
   }
@@ -381,53 +396,57 @@ std::optional<std::string> DBInterface::identifyMapLocation(const pair_data_t& d
   return node_id;
 }
 
-void DBInterface::addURL(const std::optional<std::string>& URL)
+void DBInterface::addUniqueString(const std::optional<std::string>& ustring)
 {
-  if(URL)
+  if(ustring)
   {
-    sql::query q = std::move(m_db.build_query("INSERT INTO URLs (URL) VALUES (?1)").arg(URL));
+    sql::query q = std::move(m_db.build_query("INSERT INTO unique_strings (string) VALUES (?1)").arg(ustring));
 
     while(!q.execute() && q.lastError() == SQLITE_BUSY);
     assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_CONSTRAINT_UNIQUE);
   }
 }
 
-std::optional<uint64_t> DBInterface::identifyURL(const std::optional<std::string>& URL)
+std::optional<uint64_t> DBInterface::identifyUniqueString(const std::optional<std::string>& ustring)
 {
-  std::optional<uint64_t> URL_id;
-  if(URL)
+  std::optional<uint64_t> string_id;
+  if(ustring)
   {
-    sql::query q = std::move(m_db.build_query("SELECT URL_id FROM URLs WHERE URL IS ?1").arg(URL));
+    sql::query q = std::move(m_db.build_query("SELECT string_id FROM unique_strings WHERE string IS ?1").arg(ustring));
 
     while(!q.execute() && q.lastError() == SQLITE_BUSY);
     assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_ROW);
 
     MUST(q.fetchRow())
-      q.getField(URL_id);
+      q.getField(string_id);
   }
-  return URL_id;
+  return string_id;
 }
 
-std::optional<std::string> DBInterface::getURL(const std::optional<uint64_t> URL_id)
+std::optional<std::string> DBInterface::getUniqueString(const std::optional<uint64_t> string_id)
 {
-  std::optional<std::string> URL;
-  if(URL_id)
+  std::optional<std::string> ustring;
+  if(string_id)
   {
-    sql::query q = std::move(m_db.build_query("SELECT URL FROM URLs WHERE URL_id IS ?1").arg(URL_id));
+    sql::query q = std::move(m_db.build_query("SELECT string FROM unique_strings WHERE string_id IS ?1").arg(string_id));
 
     while(!q.execute() && q.lastError() == SQLITE_BUSY);
     assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_ROW);
 
     MUST(q.fetchRow())
-      q.getField(URL);
+      q.getField(ustring);
   }
-  return URL;
+  return ustring;
 }
 
 void DBInterface::addContact(const contact_t& contact)
 {
-  addURL(contact.URL);
-  std::optional<uint64_t> URL_id = identifyURL(contact.URL);
+  addUniqueString(contact.phone_number);
+  addUniqueString(contact.URL);
+
+  std::optional<uint64_t> phone_id = identifyUniqueString(contact.phone_number);
+  std::optional<uint64_t> URL_id = identifyUniqueString(contact.URL);
+
   if(contact)
   {
     sql::query q = std::move(m_db.build_query("INSERT INTO contact ("
@@ -437,7 +456,7 @@ void DBInterface::addContact(const contact_t& contact)
                                                 "state,"
                                                 "country,"
                                                 "postal_code,"
-                                                "phone_number,"
+                                                "phone_id,"
                                                 "URL_id"
                                               ") VALUES (?1,?2,?3,?4,?5,?6,?7,?8)")
                              .arg(contact.street_number)
@@ -446,7 +465,7 @@ void DBInterface::addContact(const contact_t& contact)
                              .arg(contact.state)
                              .arg(contact.country)
                              .arg(contact.postal_code)
-                             .arg(contact.phone_number)
+                             .arg(phone_id)
                              .arg(URL_id));
 
     while(!q.execute() && q.lastError() == SQLITE_BUSY);
@@ -491,7 +510,7 @@ contact_t DBInterface::getContact(const std::optional<uint64_t> contact_id)
   contact_t contact;
   if(contact_id)
   {
-    std::optional<uint64_t> URL_id;
+    std::optional<uint64_t> URL_id, phone_id;
     contact.contact_id = contact_id;
     { // scope for sql::query type
       sql::query q = std::move(m_db.build_query("SELECT "
@@ -501,7 +520,7 @@ contact_t DBInterface::getContact(const std::optional<uint64_t> contact_id)
                                                   "state,"
                                                   "country,"
                                                   "postal_code,"
-                                                  "phone_number,"
+                                                  "phone_id,"
                                                   "URL_id "
                                                 "FROM "
                                                   "contact "
@@ -521,12 +540,13 @@ contact_t DBInterface::getContact(const std::optional<uint64_t> contact_id)
          .getField(contact.state)
          .getField(contact.country)
          .getField(contact.postal_code)
-         .getField(contact.phone_number)
+         .getField(phone_id)
          .getField(URL_id);
 
       }
     }
-    contact.URL = getURL(URL_id);
+    contact.phone_number = getUniqueString(phone_id);
+    contact.URL = getUniqueString(URL_id);
   }
   return contact;
 }
@@ -713,66 +733,6 @@ power_t DBInterface::getPower(const std::optional<uint64_t> power_id)
   return power;
 }
 
-void DBInterface::addSchedule(const schedule_t& schedule)
-{
-  if(schedule)
-  {
-    sql::query q = std::move(m_db.build_query("INSERT INTO schedule (week) VALUES (?1)")
-                             .arg(static_cast<std::string>(schedule)));
-
-    while(!q.execute() && q.lastError() == SQLITE_BUSY);
-    assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_CONSTRAINT_UNIQUE);
-  }
-}
-
-std::optional<uint64_t> DBInterface::identifySchedule(const schedule_t& schedule)
-{
-  std::optional<uint64_t> schedule_id;
-  if(schedule)
-  {
-    sql::query q = std::move(m_db.build_query("SELECT "
-                                                "schedule_id "
-                                              "FROM "
-                                                "schedule "
-                                              "WHERE "
-                                                "week IS ?1")
-                             .arg(static_cast<std::string>(schedule)));
-
-    while(!q.execute() && q.lastError() == SQLITE_BUSY);
-    assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_ROW);
-
-    MUST(q.fetchRow())
-      q.getField(schedule_id);
-  }
-  return schedule_id;
-}
-
-schedule_t DBInterface::getSchedule(const std::optional<uint64_t> schedule_id)
-{
-  schedule_t schedule;
-  if(schedule_id)
-  {
-    schedule.schedule_id = schedule_id;
-    sql::query q = std::move(m_db.build_query("SELECT "
-                                                "week "
-                                              "FROM "
-                                                "schedule "
-                                              "WHERE "
-                                                "schedule_id IS ?1")
-                             .arg(schedule_id));
-
-    while(!q.execute() && q.lastError() == SQLITE_BUSY);
-    assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_ROW);
-
-    std::string tmpstr;
-    MUST(q.fetchRow())
-      q.getField(tmpstr);
-    schedule = tmpstr;
-  }
-
-  return schedule;
-}
-
 void DBInterface::addPort(port_t& port)
 {
   addPower(port.power);
@@ -837,16 +797,15 @@ port_t DBInterface::getPort(Network network_id, const std::string& port_id)
   return port;
 }
 
+
+
 void DBInterface::addStation(station_t& station)
 {
   try
   {
-    station.incorporate(getStation(*station.network_id, *station.station_id));
+    station.incorporate(getStation(station.location));
 
     assert(!station.ports.empty());
-    ext::string port_ids;
-    for(auto& port : station.ports)
-      port_ids.list_append(',', *port.port_id);
 
     { // sync contact structs
       contact_t contact;
@@ -868,10 +827,6 @@ void DBInterface::addStation(station_t& station)
       station.contact = contact;
     }
 
-    std::optional<std::string> schedule;
-    if(station.schedule)
-      schedule = station.schedule;
-
     if(station.price) // sync price structs
     {
       for(auto& port : station.ports)
@@ -886,10 +841,12 @@ void DBInterface::addStation(station_t& station)
       addPort(port);
     }
 
-    addSchedule(station.schedule);
-    station.schedule.schedule_id = identifySchedule(station.schedule);
+    addUniqueString(station.schedule);
+    station.schedule.schedule_id = identifyUniqueString(station.schedule);
 
     sql::query q = std::move(m_db.build_query("INSERT OR REPLACE INTO stations ("
+                                                "meta_network_ids,"
+                                                "meta_station_ids,"
                                                 "network_id,"
                                                 "station_id,"
                                                 "latitude,"
@@ -901,7 +858,9 @@ void DBInterface::addStation(station_t& station)
                                                 "contact_id,"
                                                 "schedule_id,"
                                                 "port_ids"
-                                              ") VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)")
+                                              ") VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)")
+                             .arg(to_optional(ext::to_string<Network>(station.meta_network_ids)))
+                             .arg(to_optional(ext::to_string(station.meta_station_ids)))
                              .arg(station.network_id)
                              .arg(station.station_id)
                              .arg(station.location.latitude)
@@ -912,7 +871,7 @@ void DBInterface::addStation(station_t& station)
                              .arg(station.restrictions)
                              .arg(station.contact.contact_id)
                              .arg(station.schedule.schedule_id)
-                             .arg(static_cast<std::string&>(port_ids)));
+                             .arg(to_optional(ext::to_string<port_t>(station.ports, [](const port_t& p) { return *p.port_id; }))));
 
     while(!q.execute() && q.lastError() == SQLITE_BUSY);
     assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_CONSTRAINT_PRIMARYKEY);
@@ -926,14 +885,18 @@ void DBInterface::addStation(station_t& station)
 station_t DBInterface::getStation(sql::query&& q)
 {
   station_t station;
-  ext::string port_ids;
 
   while(!q.execute() && q.lastError() == SQLITE_BUSY);
   assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_ROW);
 
   if(q.fetchRow())
   {
-    q.getField(station.network_id)
+    std::optional<std::string> meta_network_ids, meta_station_ids;
+    std::string port_ids;
+
+    q.getField(meta_network_ids)
+     .getField(meta_station_ids)
+     .getField(station.network_id)
      .getField(station.station_id)
      .getField(station.location.latitude)
      .getField(station.location.longitude)
@@ -943,15 +906,17 @@ station_t DBInterface::getStation(sql::query&& q)
      .getField(station.restrictions)
      .getField(station.contact.contact_id)
      .getField(station.schedule.schedule_id)
-     .getField(static_cast<std::string&>(port_ids));
+     .getField(port_ids);
 
-    for(const auto& port_id : port_ids.split_string({','}))
-      station.ports.emplace_back(getPort(*station.network_id, port_id));
+    station.meta_network_ids = ext::to_list<Network>(meta_network_ids);
+    station.meta_station_ids = ext::to_list(meta_station_ids);
 
-
+    station.ports = ext::to_list<port_t>(port_ids,
+                                         [&station, this](const std::string& port_id)
+                                         { return getPort(*station.network_id, port_id); });
 
     station.contact = getContact(station.contact.contact_id);
-    station.schedule = getSchedule(station.schedule.schedule_id);
+    station.schedule = getUniqueString(station.schedule.schedule_id);
   }
 
   return station;
@@ -962,6 +927,8 @@ station_t DBInterface::getStation(uint64_t contact_id)
   try
   {
     return getStation(std::move(m_db.build_query( "SELECT "
+                                                    "meta_network_ids,"
+                                                    "meta_station_ids,"
                                                     "network_id,"
                                                     "station_id,"
                                                     "latitude,"
@@ -991,6 +958,8 @@ station_t DBInterface::getStation(Network network_id, const std::string& station
   try
   {
     return getStation(std::move(m_db.build_query( "SELECT "
+                                                    "meta_network_ids,"
+                                                    "meta_station_ids,"
                                                     "network_id,"
                                                     "station_id,"
                                                     "latitude,"
@@ -1017,11 +986,13 @@ station_t DBInterface::getStation(Network network_id, const std::string& station
   return {};
 }
 
-station_t DBInterface::getStation(double latitude, double longitude)
+station_t DBInterface::getStation(coords_t location)
 {
   try
   {
     return getStation(std::move(m_db.build_query( "SELECT "
+                                                    "meta_network_ids,"
+                                                    "meta_station_ids,"
                                                     "network_id,"
                                                     "station_id,"
                                                     "latitude,"
@@ -1038,8 +1009,8 @@ station_t DBInterface::getStation(double latitude, double longitude)
                                                   "WHERE "
                                                     "latitude IS ?1 AND "
                                                     "longitude IS ?2")
-                                .arg(latitude)
-                                .arg(longitude)));
+                                .arg(location.latitude)
+                                .arg(location.longitude)));
   }
   catch(std::string& error)
   {
