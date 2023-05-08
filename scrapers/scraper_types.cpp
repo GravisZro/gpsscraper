@@ -7,13 +7,21 @@
 #include "utilities.h"
 
 
+//constexpr std::string_view dbfile = "conflicts.db";
+
+std::ostream& operator << (std::ostream &out, const std::pair<int32_t, int32_t>& value) noexcept
+{
+  out << "{ " << value.first << ", " << value.second << " }";
+  return out;
+}
+
 template<typename T>
 void incorporate_optional(std::optional<T>& a, const std::optional<T>& b)
 {
   if(!a && b)
     a = b;
-  else if(a && b)
-    assert(*a == *b);
+  else if(a && b && *a != *b)
+    std::cout << "mismatched values: \"" << *a << "\" vs \"" << *b << "\"" << std::endl;
 }
 
 template<>
@@ -21,9 +29,89 @@ void incorporate_optional(std::optional<std::string>& a, const std::optional<std
 {
   if(!a || (a && a->empty())) // 'a' not set or 'a' empty
     a = b;
-  else if(a && b) // both are set
-    if(a != b)
-      std::cout << "mismatched strings!: \"" << *a << "\" vs \"" << *b << "\"" << std::endl;
+  else if(a && b && a != b) // both are set and mismatch
+  {
+    if(!std::any_of(std::begin(*a), std::end(*a), [](const char c) { return std::islower(c); } )) // if no lowercase chars (all caps alpha characters)
+      a = b;
+    else if(a->find("The EVgo") == 0 ||
+            a->find("Removed") != std::string::npos ||
+            false)
+    {
+      ext::string first = *a, second = *b;
+      while(first.replace("\n", "\\n"));
+      while(second.replace("\n", "\\n"));
+      std::cout << "prefered: \"" << first << "\" over \"" << second << "\"" << std::endl;
+    }
+    else if(a->find("Puissance") != std::string::npos ||
+            a->find("heure") != std::string::npos ||
+            a->find("Énergie") == 0 ||
+            a->find("null") == 0 ||
+            a->find("LUNDI") == 0 ||
+            a->find("Temps") == 0 ||
+            a->find("Stationnement") == 0 ||
+            a->find("Tarification") == 0 ||
+            a->find("stationnement") != std::string::npos ||
+
+            a->find("Boulevard") == 0 ||
+            a->find("boulevard") == 0 ||
+            a->find("Boul.") == 0 ||
+            a->find("boul.") == 0 ||
+            a->find("boul ") == 0 ||
+            a->find("Boul ") == 0 ||
+
+            a->find("avenue") == 0 ||
+            a->find("Avenue") == 0 ||
+            a->find("Av.") == 0 ||
+            a->find("av.") == 0 ||
+
+            (a->find("NW") != std::string::npos && b->find("Northwest") != std::string::npos) ||
+            (a->find("NE") != std::string::npos && b->find("Northeast") != std::string::npos) ||
+            (a->find("SW") != std::string::npos && b->find("Southwest") != std::string::npos) ||
+            (a->find("SE") != std::string::npos && b->find("Southeast") != std::string::npos) ||
+
+            (a->find("Hwy"  ) != std::string::npos && b->find("Highway"   ) != std::string::npos) ||
+            (a->find("Rd"   ) != std::string::npos && b->find("Road"      ) != std::string::npos) ||
+            (a->find("Ln"   ) != std::string::npos && b->find("Lane"      ) != std::string::npos) ||
+            (a->find("Pkwy" ) != std::string::npos && b->find("Parkway"   ) != std::string::npos) ||
+            (a->find("Blvd" ) != std::string::npos && b->find("Boulevard" ) != std::string::npos) ||
+
+            (a->find("Dr"   ) != std::string::npos && a->find("Drive" ) == std::string::npos && b->find("Drive" ) != std::string::npos) ||
+            (a->find("St"   ) != std::string::npos && a->find("Street") == std::string::npos && b->find("Street") != std::string::npos) ||
+            (a->find("Ave"  ) != std::string::npos && a->find("Avenue") == std::string::npos && b->find("Avenue") != std::string::npos) ||
+            (a->find("Cir"  ) != std::string::npos && a->find("Circle") == std::string::npos && b->find("Circle") != std::string::npos) ||
+
+            (a->find("E") != std::string::npos && a->find("East"  ) == std::string::npos && b->find("East"  ) != std::string::npos) ||
+            (a->find("W") != std::string::npos && a->find("West"  ) == std::string::npos && b->find("West"  ) != std::string::npos) ||
+            (a->find("N") != std::string::npos && a->find("North" ) == std::string::npos && b->find("North" ) != std::string::npos) ||
+            (a->find("S") != std::string::npos && a->find("South" ) == std::string::npos && b->find("South" ) != std::string::npos) ||
+            false)
+    {
+      ext::string first = *a, second = *b;
+      while(first.replace("\n", "\\n"));
+      while(second.replace("\n", "\\n"));
+      std::cout << "prefered: \"" << second << "\" over \"" << first << "\"" << std::endl;
+      a = b;
+    }
+    else if (a->at(0) == ' ' ||
+             std::islower(a->at(0)) ||
+             (a->find('|') != std::string::npos && b->find('|') == std::string::npos) ||
+             (a->find('-') != std::string::npos && a->find(' ') == std::string::npos) ||
+             false)
+    {
+      ext::string first = *a, second = *b;
+      while(first.replace("\n", "\\n"));
+      while(second.replace("\n", "\\n"));
+      std::cout << "ambiguous preference: \"" << second << "\" over \"" << first << "\"" << std::endl;
+      a = b;
+    }
+    else
+    {
+      ext::string first = *a, second = *b;
+      while(first.replace("\n", "\\n"));
+      while(second.replace("\n", "\\n"));
+      std::cout << "mismatched strings: \"" << first << "\" vs \"" << second << "\"" << std::endl;
+    }
+  }
 }
 
 
@@ -138,72 +226,210 @@ schedule_t::operator std::string(void) const
 {  
   std::string out = raw_string;
   if(out.empty())
-    for(int daynum = 0; const auto& dayofweek : days)
+    for(int daynum = 0; const auto& dayofweek : week)
     {
       if(daynum++)
-        out.push_back(';');
+        out.push_back(',');
       if(dayofweek)
-        out += std::to_string(dayofweek->first) + "," +
+        out += std::to_string(dayofweek->first) + "|" +
                std::to_string(dayofweek->second);
     }
   return out;
 }
 
-schedule_t& schedule_t::operator =(const std::string& input)
+schedule_t& schedule_t::operator =(const std::optional<std::string>& input)
 {
   raw_string.clear();
-  if(std::any_of(std::begin(input), std::end(input), [](const char c) { return std::isalpha(c); } ))
-     raw_string = input;
-  else
+  for(auto& day : week)
+    day.reset();
+
+  if(input)
   {
-    for(int daynum = 0; const auto& dayofweek : ext::string(input).split_string({';'}))
+    auto days_list = ext::to_list(input, ',');
+    if(days_list.size() != 7 ||
+       std::any_of(std::begin(*input), std::end(*input), [](const char c) { return std::isalpha(c); } ))
+      raw_string = *input;
+    else
     {
-      auto comma = dayofweek.find_first_of(',');
-      days[daynum].reset();
-      if(comma != std::string::npos)
-        days[daynum].emplace(ext::from_string<int32_t>(dayofweek.substr(0, comma)),
-                             ext::from_string<int32_t>(dayofweek.substr(comma + 1)));
-      ++daynum;
+      for(int daynum = 0; const auto& dayofweek : days_list)
+      {
+        size_t splitter = dayofweek.find_first_of('|');
+        if(splitter != std::string::npos)
+          week[daynum].emplace(ext::from_string<int32_t>(dayofweek.substr(0, splitter)),
+                               ext::from_string<int32_t>(dayofweek.substr(splitter + 1)));
+        ++daynum;
+      }
     }
   }
+
   return *this;
 }
 
 schedule_t::operator bool(void) const
-  { return std::any_of(std::begin(days), std::end(days), [](const std::optional<hours_t>& i) { return bool(i); }); }
+  { return std::any_of(std::begin(week), std::end(week), [](const std::optional<hours_t>& i) { return bool(i); }); }
 
 bool schedule_t::operator ==(const schedule_t& o) const
-  { return days == o.days; }
+  { return week == o.week; }
 
 void schedule_t::incorporate(const schedule_t& o)
 {
-  for(std::size_t i = 0; i < days.size(); ++i)
-    incorporate_optional(days[i], o.days[i]);
+  if(!raw_string.empty() && bool(o))
+  {
+    raw_string.clear();
+    *this = o;
+  }
+  if(bool(*this) && bool(o) && *this != o)
+    std::cout << "mismatched scedules!: \"" << *this << "\" vs \"" << o << "\"" << std::endl;
 }
 
 // === station_t ===
+template<typename T>
+void incorporate_list(std::list<T>&a, const std::list<T>& b)
+{
+  a.insert(std::end(a),
+               std::make_move_iterator(std::begin(b)),
+               std::make_move_iterator(std::end(b)));
+
+  a.sort();
+  a.erase(std::unique(std::begin(a), std::end(a)), std::end(a));
+}
+
 void station_t::incorporate(const station_t& o)
 {
+  incorporate_list(meta_network_ids, o.meta_network_ids);
+  incorporate_list(meta_station_ids, o.meta_station_ids);
+
+  if(network_id && o.network_id && network_id == Network::Unknown)
+    network_id = o.network_id;
+
+  incorporate_optional(network_id, o.network_id);
+  incorporate_optional(station_id, o.station_id);
+
   power.incorporate(o.power);
   contact.incorporate(o.contact);
   price.incorporate(o.price);
 
   incorporate_optional(name, o.name);
   incorporate_optional(description, o.description);
-  incorporate_optional(access_public, o.access_public);
+
+  // custom merge
+  if(!access_public && o.access_public)
+    access_public = o.access_public;
+  else if(access_public && o.access_public &&
+          (!*access_public || !*o.access_public))
+    access_public = false;
+  //incorporate_optional(access_public, o.access_public);
+
   incorporate_optional(restrictions, o.restrictions);
   incorporate_optional(name, o.name);
 
-  ports.insert(std::end(ports),
-               std::make_move_iterator(std::begin(o.ports)),
-               std::make_move_iterator(std::end(o.ports)));
 
-  ports.sort();
-  ports.erase(std::unique(std::begin(ports), std::end(ports)), std::end(ports));
+  for(const auto& port : o.ports)
+  {
+    auto loc = std::find(std::begin(ports), std::end(ports), port);
+    if(loc != std::end(ports))
+      loc->incorporate(port);
+    else
+      ports.push_back(port);
+  }
 }
 
 
-std::ostream & operator << (std::ostream &out, const Payment value) noexcept
+void port_t::incorporate(const port_t& o)
+{
+  incorporate_optional(network_id, o.network_id);
+  incorporate_optional(station_id, o.station_id);
+  incorporate_optional(port_id, o.port_id);
+  incorporate_optional(status, o.status);
+
+  power.incorporate(o.power);
+  contact.incorporate(o.contact);
+  price.incorporate(o.price);
+
+  incorporate_optional(display_name, o.display_name);
+}
+
+std::ostream& operator << (std::ostream &out, const Network value) noexcept
+{
+  switch(value)
+  {
+    case Network::Non_Networked: out << "Non_Networked"; break;
+    case Network::Unknown: out << "Unknown"; break;
+    case Network::AmpUp: out << "AmpUp"; break;
+    case Network::Astria: out << "Astria"; break;
+    case Network::Azra: out << "Azra"; break;
+    case Network::BC_Hydro_EV: out << "BC_Hydro_EV"; break;
+    case Network::Blink: out << "Blink"; break;
+    case Network::ChargeLab: out << "ChargeLab"; break;
+    case Network::ChargePoint: out << "ChargePoint"; break;
+    case Network::Circuit_Électrique: out << "Circuit_Électrique"; break;
+    case Network::CityVitae: out << "CityVitae"; break;
+    case Network::Coop_Connect: out << "Coop_Connect"; break;
+    case Network::eCharge: out << "eCharge"; break;
+    case Network::EcoCharge: out << "EcoCharge"; break;
+    case Network::Electrify_America: out << "Electrify_America"; break;
+    case Network::Electrify_Canada: out << "Electrify_Canada"; break;
+    case Network::EV_Link: out << "EV_Link"; break;
+    case Network::EV_Range: out << "EV_Range"; break;
+    case Network::EVConnect: out << "EVConnect"; break;
+    case Network::EVCS: out << "EVCS"; break;
+    case Network::EVduty: out << "EVduty"; break;
+    case Network::evGateway: out << "evGateway"; break;
+    case Network::EVgo: out << "EVgo"; break;
+    case Network::EVMatch: out << "EVMatch"; break;
+    case Network::EVolve_NY: out << "EVolve_NY"; break;
+    case Network::EVSmart: out << "EVSmart"; break;
+    case Network::Flash: out << "Flash"; break;
+    case Network::Flo: out << "Flo"; break;
+    case Network::FPL_Evolution: out << "FPL_Evolution"; break;
+    case Network::Francis_Energy: out << "Francis_Energy"; break;
+    case Network::GE: out << "GE"; break;
+    case Network::Go_Station: out << "Go_Station"; break;
+    case Network::Hypercharge: out << "Hypercharge"; break;
+    case Network::Ivy: out << "Ivy"; break;
+    case Network::Livingston_Energy: out << "Livingston_Energy"; break;
+    case Network::myEVroute: out << "myEVroute"; break;
+    case Network::NL_Hydro: out << "NL_Hydro"; break;
+    case Network::Noodoe_EV: out << "Noodoe_EV"; break;
+    case Network::OK2Charge: out << "OK2Charge"; break;
+    case Network::On_the_Run: out << "On_the_Run"; break;
+    case Network::OpConnect: out << "OpConnect"; break;
+    case Network::Petro_Canada: out << "Petro_Canada"; break;
+    case Network::PHI: out << "PHI"; break;
+    case Network::Powerflex: out << "Powerflex"; break;
+    case Network::RED_E: out << "RED_E"; break;
+    case Network::Rivian: out << "Rivian"; break;
+    case Network::SemaConnect: out << "SemaConnect"; break;
+    case Network::Shell_Recharge: out << "Shell_Recharge"; break;
+    case Network::Sun_Country_Highway: out << "Sun_Country_Highway"; break;
+    case Network::SWTCH: out << "SWTCH"; break;
+    case Network::SYNC_EV: out << "SYNC_EV"; break;
+    case Network::Tesla: out << "Tesla"; break;
+    case Network::Universal: out << "Universal"; break;
+    case Network::Voita: out << "Voita"; break;
+    case Network::Webasto: out << "Webasto"; break;
+    case Network::ZEF_Energy: out << "ZEF_Energy"; break;
+    case Network::ChargeHub: out << "ChargeHub"; break;
+    case Network::Eptix: out << "Eptix"; break;
+  }
+  return out;
+}
+
+std::ostream& operator << (std::ostream &out, const Status value) noexcept
+{
+  switch(value)
+  {
+    case Status::Unknown: out << "Unknown"; break;
+    case Status::Operational: out << "Operational"; break;
+    case Status::InUse: out << "InUse"; break;
+    case Status::InMaintaince: out << "InMaintaince"; break;
+    case Status::NonFunctional: out << "NonFunctional"; break;
+    case Status::PlannedSite: out << "PlannedSite"; break;
+  }
+  return out;
+}
+
+std::ostream& operator << (std::ostream &out, const Payment value) noexcept
 {
   if(value == Payment::Undefined)
     out << "null";
@@ -228,7 +454,7 @@ std::ostream & operator << (std::ostream &out, const Payment value) noexcept
   return out;
 }
 
-std::ostream & operator << (std::ostream &out, const Unit value) noexcept
+std::ostream& operator << (std::ostream &out, const Unit value) noexcept
 {
   switch(value)
   {
@@ -244,7 +470,7 @@ std::ostream & operator << (std::ostream &out, const Unit value) noexcept
   return out;
 }
 
-std::ostream & operator << (std::ostream &out, const Currency value) noexcept
+std::ostream& operator << (std::ostream &out, const Currency value) noexcept
 {
   switch(value)
   {
@@ -256,7 +482,7 @@ std::ostream & operator << (std::ostream &out, const Currency value) noexcept
   return out;
 }
 
-std::ostream & operator << (std::ostream &out, const Connector value) noexcept
+std::ostream& operator << (std::ostream &out, const Connector value) noexcept
 {
   if(value == Connector::Unknown)
     out << "null";
@@ -284,7 +510,7 @@ std::ostream & operator << (std::ostream &out, const Connector value) noexcept
 }
 
 
-std::ostream & operator << (std::ostream &out, const contact_t& value) noexcept
+std::ostream& operator << (std::ostream &out, const contact_t& value) noexcept
 {
   if(!value)
     out << "Contact: null" << std::endl;
@@ -302,7 +528,7 @@ std::ostream & operator << (std::ostream &out, const contact_t& value) noexcept
   return out;
 }
 
-std::ostream & operator << (std::ostream &out, const price_t& value) noexcept
+std::ostream& operator << (std::ostream &out, const price_t& value) noexcept
 {
   if(!value)
     out << "Price: null" << std::endl;
@@ -319,7 +545,7 @@ std::ostream & operator << (std::ostream &out, const price_t& value) noexcept
   return out;
 }
 
-std::ostream & operator << (std::ostream &out, const power_t& value) noexcept
+std::ostream& operator << (std::ostream &out, const power_t& value) noexcept
 {
   if(!value)
     out << "Power: null" << std::endl;

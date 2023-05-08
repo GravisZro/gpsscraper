@@ -27,12 +27,12 @@ enum class Connector : uint8_t
 
 enum class Status : uint8_t
 {
-  Unknown = 0,  // status unknown
-  Operational,  // availible for use
-  InUse,        // currently in use
-  InMaintaince, // being repaired
-  Broken,       // broken
-  PlannedSite,  // doesn't exist yet
+  Unknown = 0,    // status unknown
+  Operational,    // availible for use
+  InUse,          // currently in use
+  InMaintaince,   // being repaired
+  NonFunctional,  // broken
+  PlannedSite,    // doesn't exist yet
 };
 
 enum class Network : uint8_t
@@ -94,7 +94,9 @@ enum class Network : uint8_t
   Webasto = 7,
   ZEF_Energy = 25,
 
-  ChargeHub = 128,
+// meta networks
+  ChargeHub = 100,
+  Eptix,
 };
 
 enum class Parser : uint8_t
@@ -280,11 +282,11 @@ struct schedule_t
   using hours_t = std::pair<int32_t, int32_t>;
 
   std::optional<uint64_t> schedule_id; // ignored in functions
-  std::array<std::optional<hours_t>, 7> days;
+  std::array<std::optional<hours_t>, 7> week;
   std::string raw_string;
 
   operator std::string(void) const;
-  schedule_t& operator =(const std::string& input);
+  schedule_t& operator =(const std::optional<std::string>& input);
 
   operator bool(void) const;
   bool operator ==(const schedule_t& o) const;
@@ -306,12 +308,17 @@ struct port_t
 
   bool operator ==(const port_t& o) const { return port_id == o.port_id; }
   bool operator <(const port_t& o) const { return port_id < o.port_id; }
+  void incorporate(const port_t& o);
+
 };
 
 struct station_t
 {
-  std::optional<Network>  network_id;
-  std::optional<std::string> station_id;
+  station_t(void) : location({0.0, 0.0}) {}
+  std::list<Network>          meta_network_ids;
+  std::list<std::string>      meta_station_ids;
+  std::optional<Network>      network_id;
+  std::optional<std::string>  station_id;
 
   coords_t location;
 

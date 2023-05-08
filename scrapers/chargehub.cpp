@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <regex>
 
+#include <map>
+
 #include <shortjson/shortjson.h>
 #include "utilities.h"
 
@@ -477,8 +479,7 @@ std::string process_schedule(const std::optional<std::string>& input)
             EndTime,
           };
 
-          auto day_list = ext::string(match[DayList].str()).split_string({' '});
-          for(const auto& pos : day_list)
+          for(const auto& pos : ext::to_list(match[DayList].str(), ' '))
             if(!pos.empty())
               selected_days.insert(day_number(lang, pos));
 
@@ -497,7 +498,7 @@ std::string process_schedule(const std::optional<std::string>& input)
 
           for(auto daynum : selected_days)
             if(!start_time.empty() && !end_time.empty())
-              output.days[daynum] = std::make_pair(start_time_mins, end_time_mins);
+              output.week[daynum] = std::make_pair(start_time_mins, end_time_mins);
 
         }
         else
@@ -537,8 +538,7 @@ std::vector<pair_data_t> ChargehubScraper::ParseStation(const pair_data_t& data,
 
     for(const safenode_t& nodeL1 : nodeL0.safeObject())
     {
-      if(nodeL1.idString("Id", nd.station.station_id) ||
-         nodeL1.idString("LocName", nd.station.name) ||
+      if(nodeL1.idString("LocName", nd.station.name) ||
          nodeL1.idString("LocDesc", nd.station.description) ||
          nodeL1.idInteger("StreetNo", nd.station.contact.street_number) ||
          nodeL1.idString("Street", nd.station.contact.street_name) ||
@@ -550,11 +550,15 @@ std::vector<pair_data_t> ChargehubScraper::ParseStation(const pair_data_t& data,
          nodeL1.idFloat("Long", nd.station.location.longitude) ||
          nodeL1.idString("Phone", nd.station.contact.phone_number) ||
          nodeL1.idString("Web", nd.station.contact.URL) ||
-         nodeL1.idString("PriceString", nd.station.price.text))
+         nodeL1.idString("PriceString", nd.station.price.text) ||
+         nodeL1.idEnum("NetworkId", nd.station.network_id))
       {
       }
-      else if(nodeL1.idEnum("NetworkId", nd.station.network_id))
-        *nd.station.network_id |= Network::ChargeHub;
+      else if(nodeL1.idString("Id", tmpstr))
+      {
+        nd.station.meta_station_ids.push_back(*tmpstr);
+        nd.station.meta_network_ids.push_back(Network::ChargeHub);
+      }
       else if(nodeL1.idString("AccessTime", tmpstr))
       {
         nd.station.schedule = process_schedule(tmpstr);

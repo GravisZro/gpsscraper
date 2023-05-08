@@ -154,8 +154,8 @@ pair_data_t EptixScraper::ParseStationNode(const pair_data_t& data, const safeno
 
   pair_data_t nd;
   nd.query.parser = Parser::Discard;
-  nd.station.network_id = Network::Circuit_Électrique; // default network
   nd.query.bounds = data.query.bounds;
+  nd.station.network_id = Network::Unknown; // unknown by default
   nd.station.access_public = true; // public by default
 
   std::optional<Status> status;
@@ -175,7 +175,10 @@ pair_data_t EptixScraper::ParseStationNode(const pair_data_t& data, const safeno
         if(nodeL0.type == shortjson::Field::Integer && nodeL0.toNumber() == 1)
           nd.query.parser = Parser::BuildQuery | Parser::Station;
         else
+        {
           nd.query.parser = Parser::BuildQuery | Parser::MapArea;
+          nd.station.network_id = Network::Eptix;
+        }
       }
       else if(nodeL0.identifier == "distance") // map view request
         nd.query.parser = Parser::BuildQuery | Parser::Station;
@@ -186,8 +189,11 @@ pair_data_t EptixScraper::ParseStationNode(const pair_data_t& data, const safeno
     if(nodeL0.idString("websiteUrl", nd.station.contact.URL))
     {
     }
-    else if(nodeL0.idString("id", nd.station.station_id))
-      nd.query.node_id = nd.station.station_id;
+    else if(nodeL0.idString("id", nd.query.node_id))
+    {
+      nd.station.meta_station_ids.push_back(*nd.query.node_id);
+      nd.station.meta_network_ids.push_back(Network::Eptix);
+    }
     else if(nodeL0.idString("name", nd.station.name))
     {
       if(nd.station.access_public == true)
@@ -259,7 +265,7 @@ pair_data_t EptixScraper::ParseStationNode(const pair_data_t& data, const safeno
     else if(nodeL0.idString("status", tmpstr))
     {
       if(tmpstr == "outOfService")
-        status = Status::Broken;
+        status = Status::NonFunctional;
       else if(*tmpstr == "available")
         status = Status::Operational;
       else if(*tmpstr == "inUse")
@@ -291,7 +297,7 @@ pair_data_t EptixScraper::ParseStationNode(const pair_data_t& data, const safeno
     else if(nodeL0.identifier == "info")
     {
       if(nodeL0.idString("Line2", tmpstr))
-        std::cout << "station: " << nd.station.station_id << std::endl
+        std::cout << "station: " << nd.query.node_id << std::endl
                   << nodeL0.identifier << ": " << *tmpstr << std::endl;
     }
     else if(nodeL0.idObject("network"))
