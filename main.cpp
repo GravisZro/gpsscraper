@@ -85,7 +85,7 @@ std::string get_page(const std::string& name, const pair_data_t& data)
      request.getLastError() != CURLE_REMOTE_ACCESS_DENIED)
   {
     std::cerr << "scraper: " << name << std::endl
-              << "station id: " << data.station.station_id << std::endl
+              << "node id: " << data.query.node_id << std::endl
               << "name: " << data.station.name << std::endl
               << "error: " << request.getLastError() << std::endl;
   }
@@ -232,7 +232,7 @@ int main(int argc, char* argv[])
                   scraper->classify(nd); // scraper decides parser this should use
                   if(nd.query.child_ids) // has children
                   {
-                    for(auto& node_id : ext::string(*nd.query.child_ids).split_string({','}))
+                    for(auto& node_id : ext::to_list(*nd.query.child_ids))
                     {
                       pair_data_t tmp;
                       tmp.query.parser = Parser::BuildQuery | Parser::MapArea;

@@ -300,7 +300,7 @@ std::vector<pair_data_t> EVGoScraper::ParsePort(const pair_data_t& data, const s
   {
     if(nodeL0.idString("siteId", nd.station.station_id) ||
        nodeL0.idString("addressCity", nd.station.contact.city) ||
-       nodeL0.idString("addressCountryIso2Code", nd.station.contact.country) ||
+       nodeL0.idString("addressCountryIso3Code", nd.station.contact.country) ||
        nodeL0.idString("addressZipCode", nd.station.contact.postal_code) ||
        nodeL0.idString("addressUsaStateCode", nd.station.contact.state) ||
        nodeL0.idStreet("addressAddress1", nd.station.contact.street_number, nd.station.contact.street_name) ||
@@ -364,7 +364,7 @@ std::vector<pair_data_t> EVGoScraper::ParsePort(const pair_data_t& data, const s
           {
           }
           else if(nodeL2.identifier == "inMaintenance" && nodeL2.type == shortjson::Field::Boolean)
-            port.status = nodeL2.toBool() ? Status::Broken : Status::Operational;
+            port.status = nodeL2.toBool() ? Status::NonFunctional : Status::Operational;
           else if(nodeL2.idString("stationModelSocketSocketTypeId", tmpstr))
           {
             if(tmpstr == "TYPE_1_J1772_YAZAKI")
@@ -436,12 +436,12 @@ std::vector<pair_data_t> EVGoScraper::ParsePort(const pair_data_t& data, const s
             else if(tmpstr == "SATURDAY" ) day_of_week = 6;
             else
               throw __LINE__;
-            nd.station.schedule.days[day_of_week].emplace();
+            nd.station.schedule.week[day_of_week].emplace();
           }
           else if(nodeL1.idInteger("startHour", hour))
-            nd.station.schedule.days[day_of_week]->first = ((*hour / 36000) % 100) + ((*hour / 36000) / 100) * 60;
+            nd.station.schedule.week[day_of_week]->first = ((*hour / 36000) % 100) + ((*hour / 36000) / 100) * 60;
           else if(nodeL1.idInteger("endHour", hour))
-            nd.station.schedule.days[day_of_week]->second = ((*hour / 36000) % 100) + ((*hour / 36000) / 100) * 60;
+            nd.station.schedule.week[day_of_week]->second = ((*hour / 36000) % 100) + ((*hour / 36000) / 100) * 60;
         }
       }
     }
