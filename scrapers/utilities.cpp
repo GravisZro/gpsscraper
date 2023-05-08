@@ -8,39 +8,7 @@
 
 namespace ext
 {
-
-  template<> unsigned char from_string(const std::string& str, size_t* pos, int base)
-    { return std::stoi(str, pos, base); }
-
-  template<> unsigned int from_string(const std::string& str, size_t* pos, int base)
-    { return (unsigned int)(std::stoi(str, pos, base)); }
-
-  template<> int from_string(const std::string& str, size_t* pos, int base)
-    { return std::stoi(str, pos, base); }
-
-  template<> long from_string(const std::string& str, size_t* pos, int base)
-    { return std::stol(str, pos, base); }
-
-  template<> long long from_string(const std::string& str, size_t* pos, int base)
-    { return std::stoll(str, pos, base); }
-
-  template<> unsigned long from_string(const std::string& str, size_t* pos, int base)
-    { return std::stoul(str, pos, base); }
-
-  template<> unsigned long long from_string(const std::string& str, size_t* pos, int base)
-    { return std::stoull(str, pos, base); }
-
-
-  template<> float from_string(const std::string& str, size_t* pos)
-    { return std::stof(str, pos); }
-
-  template<> double from_string(const std::string& str, size_t* pos)
-    { return std::stod(str, pos); }
-
-  template<> long double from_string(const std::string& str, size_t* pos)
-    { return std::stold(str, pos); }
-
-
+  // ext::string class member functions
   string string::arg(const std::string& data) const noexcept
   {
     int argnum = 0;
@@ -234,5 +202,64 @@ namespace ext
     if(offset != std::string::npos)
       offset += other.size();
     return offset;
+  }
+
+  //ext::from_string functions
+    // integer
+  template<> unsigned char from_string(const std::string& str, size_t* pos, int base)
+    { return std::stoi(str, pos, base); }
+
+  template<> unsigned int from_string(const std::string& str, size_t* pos, int base)
+    { return (unsigned int)(std::stoi(str, pos, base)); }
+
+  template<> int from_string(const std::string& str, size_t* pos, int base)
+    { return std::stoi(str, pos, base); }
+
+  template<> long from_string(const std::string& str, size_t* pos, int base)
+    { return std::stol(str, pos, base); }
+
+  template<> long long from_string(const std::string& str, size_t* pos, int base)
+    { return std::stoll(str, pos, base); }
+
+  template<> unsigned long from_string(const std::string& str, size_t* pos, int base)
+    { return std::stoul(str, pos, base); }
+
+  template<> unsigned long long from_string(const std::string& str, size_t* pos, int base)
+    { return std::stoull(str, pos, base); }
+
+    // floating point
+  template<> float from_string(const std::string& str, size_t* pos)
+    { return std::stof(str, pos); }
+
+  template<> double from_string(const std::string& str, size_t* pos)
+    { return std::stod(str, pos); }
+
+  template<> long double from_string(const std::string& str, size_t* pos)
+    { return std::stold(str, pos); }
+
+
+  // ext::to_string functions
+  std::string to_string(const std::list<std::string>& s_list)
+  {
+    string combined;
+    for(auto& e : s_list)
+      combined.list_append(',', e);
+    return { combined };
+  }
+
+  // ext::to_list functions
+  std::list<std::string> to_list(const std::string& str, const char deliminator)
+  {
+    std::list<std::string> s_list;
+    for(auto& s : ext::string(str).split_string({ deliminator }))
+      s_list.emplace_back(s);
+    return s_list;
+  }
+
+  std::list<std::string> to_list(const std::optional<std::string>& str, const char deliminator)
+  {
+    if(!str)
+      return {};
+    return to_list(*str, deliminator);
   }
 }

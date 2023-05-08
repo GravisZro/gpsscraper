@@ -12,6 +12,7 @@
 #include <string>
 #include <type_traits>
 #include <algorithm>
+#include <functional>
 
 // C
 #include <cassert>
@@ -27,14 +28,43 @@ constexpr uint32_t operator "" _length(const char*, const size_t sz) noexcept
 
 static_assert("test"_length == 4, "misclaculation");
 
+// polyfill for is_scoped_enum
+#if !defined(__cpp_lib_is_scoped_enum) || __cpp_lib_is_scoped_enum < 202011L
+#define __cpp_lib_is_scoped_enum 202011L
+namespace std
+{
+  namespace detail {
+  namespace { // avoid ODR-violation
+  template<class T>
+  auto test_sizable(int) -> decltype(sizeof(T), std::true_type{});
+  template<class>
+  auto test_sizable(...) -> std::false_type;
+
+  template<class T>
+  auto test_nonconvertible_to_int(int)
+      -> decltype(static_cast<std::false_type (*)(int)>(nullptr)(std::declval<T>()));
+  template<class>
+  auto test_nonconvertible_to_int(...) -> std::true_type;
+
+  template<class T>
+  constexpr bool is_scoped_enum_impl = std::conjunction_v<
+      decltype(test_sizable<T>(0)),
+      decltype(test_nonconvertible_to_int<T>(0))
+  >;
+  }
+  } // namespace detail
+
+
+  template<typename E>
+  struct is_scoped_enum : std::bool_constant<detail::is_scoped_enum_impl<E>> {};
+
+  template< class T >
+  inline constexpr bool is_scoped_enum_v = is_scoped_enum<T>::value;
+}
+#endif
+
 namespace ext
 {
-  template<typename T, std::enable_if_t<std::is_integral_v<T>, bool> = true>
-  T from_string(const std::string& str, size_t* pos = nullptr, int base = 10);
-
-  template<typename T, std::enable_if_t<std::is_floating_point_v<T>, bool> = true>
-  T from_string(const std::string& str, size_t* pos = nullptr);
-
   class string : public std::string
   {
   public:
@@ -96,6 +126,65 @@ namespace ext
     string(const std::string&& other, int argnum) : std::string(other), m_argnum(argnum + 1) {}
     std::optional<int> m_argnum;
   };
+
+  //ext::from_string functions
+
+  template<typename T, std::enable_if_t<std::is_integral_v<T>, bool> = true>
+  T from_string(const std::string& str, size_t* pos = nullptr, int base = 10);
+
+  template<typename T, std::enable_if_t<std::is_floating_point_v<T>, bool> = true>
+  T from_string(const std::string& str, size_t* pos = nullptr);
+
+  // ext::to_string functions
+
+  std::string to_string(const std::list<std::string>& s_list);
+
+  template<typename T>
+  std::string to_string(const std::list<T>& t_list, const std::function<std::string(const T&)>& accessor)
+  {
+    std::list<std::string> s_list;
+    for(auto& e : t_list)
+      s_list.emplace_back(accessor(e));
+    return ext::to_string(s_list);
+  }
+
+  template<typename T, std::enable_if_t<std::is_arithmetic_v<T>, bool> = true>
+  std::string to_string(const std::list<T>& t_list)
+    { return to_string(t_list, std::to_string); }
+
+  template<typename T, std::enable_if_t<std::is_scoped_enum_v<T>, bool> = true>
+  std::string to_string(const std::list<T>& t_list)
+    { return to_string<T>(t_list, [](const T& e) { return std::to_string(static_cast<typename std::underlying_type_t<const T>>(e)); }); }
+
+  // ext::to_string functions
+  std::list<std::string> to_list(const std::string& str, const char deliminator = ',');
+
+  template<typename T>//, std::enable_if_t<(!std::is_arithmetic_v<T> && !std::is_scoped_enum_v<T>), bool> = true>
+  std::list<T> to_list(const std::string& str, const std::function<T(const std::string&)>& placer, const char deliminator = ',')
+  {
+    std::list<T> t_list;
+    for(auto& e : ext::string(str).split_string({ deliminator }))
+      t_list.emplace_back(placer(e));
+    return t_list;
+  }
+
+  template<typename T, std::enable_if_t<std::is_arithmetic_v<T>, bool> = true>
+  std::list<T> to_list(const std::string& str, const char deliminator = ',')
+    { return to_list<T>(str, [](const std::string& s) { return ext::from_string<T>(s); }, deliminator); }
+
+  template<typename T, std::enable_if_t<std::is_scoped_enum_v<T>, bool> = true>
+  std::list<T> to_list(const std::string& str, const char deliminator = ',')
+    { return to_list<T>(str, [](const std::string& s) { return T(ext::from_string<typename std::underlying_type_t<T>>(s)); }, deliminator); }
+
+  std::list<std::string> to_list(const std::optional<std::string>& str, const char deliminator = ',');
+
+  template<typename T>
+  std::list<T> to_list(const std::optional<std::string>& str, const char deliminator = ',')
+  {
+    if(!str)
+      return {};
+    return to_list<T>(*str, deliminator);
+  }
 }
 
 // shortJSON helper wrapper struct functions
@@ -396,41 +485,6 @@ struct serializable : container
   }
 
 };
-
-// polyfill for is_scoped_enum
-#if !defined(__cpp_lib_is_scoped_enum) || __cpp_lib_is_scoped_enum < 202011L
-#define __cpp_lib_is_scoped_enum 202011L
-namespace std
-{
-  namespace detail {
-  namespace { // avoid ODR-violation
-  template<class T>
-  auto test_sizable(int) -> decltype(sizeof(T), std::true_type{});
-  template<class>
-  auto test_sizable(...) -> std::false_type;
-
-  template<class T>
-  auto test_nonconvertible_to_int(int)
-      -> decltype(static_cast<std::false_type (*)(int)>(nullptr)(std::declval<T>()));
-  template<class>
-  auto test_nonconvertible_to_int(...) -> std::true_type;
-
-  template<class T>
-  constexpr bool is_scoped_enum_impl = std::conjunction_v<
-      decltype(test_sizable<T>(0)),
-      decltype(test_nonconvertible_to_int<T>(0))
-  >;
-  }
-  } // namespace detail
-
-
-  template<typename E>
-  struct is_scoped_enum : std::bool_constant<detail::is_scoped_enum_impl<E>> {};
-
-  template< class T >
-  inline constexpr bool is_scoped_enum_v = is_scoped_enum<T>::value;
-}
-#endif
 
 
 // operators for scoped enumerations
