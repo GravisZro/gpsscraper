@@ -112,13 +112,6 @@ std::vector<pair_data_t> EptixScraper::Parse(const pair_data_t& data, const std:
   return return_data;
 }
 
-std::string lower_case(std::string data)
-{
-  std::transform(data.begin(), data.end(), data.begin(),
-                 [](unsigned char c){ return std::tolower(c); });
-  return data;
-}
-
 void optional_append(std::optional<std::string>& target, std::optional<std::string> data)
 {
   if(data)
@@ -134,7 +127,9 @@ std::optional<int32_t> get_level(const safenode_t& node)
 {
   if(node.type == shortjson::Field::String)
   {
-    auto lstr = lower_case(node.toString());
+    std::string lstr = node.toString();
+    std::transform(lstr.begin(), lstr.end(), lstr.begin(),
+                   [](unsigned char c){ return std::tolower(c); });
     if(lstr == "level1")
       return 1;
     if(lstr == "level2")
@@ -196,42 +191,7 @@ pair_data_t EptixScraper::ParseStationNode(const pair_data_t& data, const safeno
     }
     else if(nodeL0.idString("name", nd.station.name))
     {
-      if(nd.station.access_public == true)
-      {
-        tmpstr = lower_case(*nd.station.name);
 
-        if(tmpstr->find("priv"  )   != std::string::npos || // private
-           tmpstr->find("only"  )   != std::string::npos || // general exclusion
-           tmpstr->find("exec"  )   != std::string::npos || // executive charger
-           tmpstr->find("dealer")   != std::string::npos || // car dealership
-           tmpstr->find(" staff")   != std::string::npos || // staff charger (space intentional)
-           tmpstr->find("employee") != std::string::npos || // employee charger
-           tmpstr->find("cosfleet")     != std::string::npos || // fleet chargers
-           tmpstr->find("bge fleet")    != std::string::npos ||
-           tmpstr->find("gsa fleet")    != std::string::npos ||
-           tmpstr->find("slco fleet")   != std::string::npos ||
-           tmpstr->find("xcel_fleet")   != std::string::npos ||
-           tmpstr->find("chem fleet")   != std::string::npos ||
-           tmpstr->find("osmp fleet")   != std::string::npos ||
-           tmpstr->find("county fleet") != std::string::npos)
-          nd.station.access_public = false;
-        else if(tmpstr->find("college") != std::string::npos ||
-                tmpstr->find("campus")  != std::string::npos) // college campus
-        {
-          nd.station.access_public = false;
-          optional_append(nd.station.restrictions, "students and staff only");
-        }
-        else if(tmpstr->find("apartment") != std::string::npos)
-        {
-          nd.station.access_public.reset();
-          optional_append(nd.station.restrictions, "likely private");
-        }
-        else if(tmpstr->find("garage") != std::string::npos)
-        {
-          nd.station.access_public.reset();
-          optional_append(nd.station.restrictions, "likely paid parking");
-        }
-      }
     }
     else if(nodeL0.idBool("isPaidParking", tmpbool))
     {
@@ -270,12 +230,12 @@ pair_data_t EptixScraper::ParseStationNode(const pair_data_t& data, const safeno
         status = Status::Operational;
       else if(*tmpstr == "inUse")
         status = Status::InUse;
-      else if(*tmpstr == "unknown" ||
-              *tmpstr == "pending")
-      {
-      }
+      else if(*tmpstr == "unknown")
+        status = Status::Unknown;
+      else if(*tmpstr == "pending")
+        status = Status::PlannedSite;
       else
-        status = Status::Operational;
+        throw __LINE__;
     }
     else if(nodeL0.idObject("message"))
     {

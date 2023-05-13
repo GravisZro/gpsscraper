@@ -4,7 +4,6 @@
 #include <string_view>
 #include <optional>
 #include <list>
-#include <set>
 #include <simplified/simple_sqlite.h>
 
 #include <scrapers/scraper_types.h>

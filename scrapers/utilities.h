@@ -2,7 +2,7 @@
 #define UTILITIES_H
 
 // containers
-#include <set>
+#include <initializer_list>
 #include <list>
 #include <stack>
 #include <vector>
@@ -79,6 +79,50 @@ namespace ext
     template<int base = 10>
     bool is_number(void) const noexcept;
 
+// "start with" functions
+    template<typename string_type = std::string_view>
+    bool starts_with(const string_type& target) const noexcept
+      { return find(target) == 0; }
+
+    template<typename string_type = std::string_view>
+    bool starts_with(const std::initializer_list<string_type>& ilist) const noexcept
+      { return std::any_of(std::begin(ilist), std::end(ilist), [this](const string_type& v) { return starts_with(v); }); }
+
+// "ends with" functions
+    template<typename string_type = std::string_view>
+    bool ends_with(const string_type& target) const noexcept
+      { return find(target) == size() - target.size(); }
+
+    template<typename string_type = std::string_view>
+    bool ends_with(const std::initializer_list<string_type>& ilist) const noexcept
+      { return std::any_of(std::begin(ilist), std::end(ilist), [this](const string_type& v) { return ends_with(v); }); }
+
+// "contains" functions
+    template<typename string_type = std::string_view>
+    bool contains(const string_type& target) const noexcept
+      { return find(target) != std::string::npos; }
+
+    template<typename string_type = std::string_view>
+    bool contains_any(const std::initializer_list<string_type>& ilist) const noexcept
+      { return std::any_of(std::begin(ilist), std::end(ilist), [this](const string_type& v) { return contains(v); }); }
+
+    template<typename string_type = std::string_view>
+    bool contains_all(const std::initializer_list<string_type>& ilist) const noexcept
+      { return std::all_of(std::begin(ilist), std::end(ilist), [this](const string_type& v) { return contains(v); }); }
+
+// "contains word" functions
+    template<typename string_type = std::string_view>
+    bool contains_word(const string_type& str) const noexcept;
+
+    template<typename string_type = std::string_view>
+    bool contains_word_any(const std::initializer_list<string_type>& ilist) const noexcept
+      { return std::any_of(std::begin(ilist), std::end(ilist), [this](const string_type& v) { return contains_word(v); }); }
+
+    template<typename string_type = std::string_view>
+    bool contains_word_all(const std::initializer_list<string_type>& ilist) const noexcept
+      { return std::all_of(std::begin(ilist), std::end(ilist), [this](const string_type& v) { return contains_word(v); }); }
+
+
     basic_string& pop_front(void)
       { return std::string::erase(0, 1); }
 
@@ -88,30 +132,30 @@ namespace ext
     string slice(size_type pos, size_type end) const
       { return substr(pos, end - pos); }
 
-    size_t erase(const std::string& other) noexcept;
-    bool replace(const std::string& other, const std::string& replacement) noexcept;
+    size_t erase(const std::string& target) noexcept;
+    bool replace(const std::string& target, const std::string& replacement) noexcept;
     void erase_before(std::string target, size_t pos = 0) noexcept;
     void erase_at(std::string target, size_t pos = 0) noexcept;
-    void erase(const std::set<char>& targets) noexcept;
+    void erase(const std::initializer_list<char>& targets) noexcept;
 
-    void trim_front(const std::set<char>& targets) noexcept;
-    void trim_back(const std::set<char>& targets) noexcept;
-    void trim(std::set<char> targets) noexcept;
+    void trim_front(const std::initializer_list<char>& targets) noexcept;
+    void trim_back(const std::initializer_list<char>& targets) noexcept;
+    void trim(std::initializer_list<char> targets) noexcept;
     void trim_whitespace(void) noexcept;
 
 
-    size_t last_occurence(const std::set<char>& targets, size_t pos = std::string::npos) const noexcept;
-    size_t first_occurence(const std::set<char>& targets, size_t pos = std::string::npos) const noexcept;
-    std::list<string> split_string(const std::set<char>& splitters) const noexcept;
+    size_t last_occurence(const std::initializer_list<char>& targets, size_t pos = std::string::npos) const noexcept;
+    size_t first_occurence(const std::initializer_list<char>& targets, size_t pos = std::string::npos) const noexcept;
+    std::list<string> split_string(const std::initializer_list<char>& targets) const noexcept;
     string& list_append(const char deliminator, const std::string& item);
 
-    size_t find_before_or_throw(const std::string& other, size_t pos, int throw_value) const;
-    size_t find_after_or_throw(const std::string& other, size_t pos, int throw_value) const;
-    size_t find_after(const std::string& other, size_t pos = 0) const noexcept;
+    size_t find_before_or_throw(const std::string& target, size_t pos, int throw_value) const;
+    size_t find_after_or_throw(const std::string& target, size_t pos, int throw_value) const;
+    size_t find_after(const std::string& target, size_t pos = 0) const noexcept;
 
-    size_t rfind_before_or_throw(const std::string& other, size_t pos, int throw_value) const;
-    size_t rfind_after_or_throw(const std::string& other, size_t pos, int throw_value) const;
-    size_t rfind_after(const std::string& other, size_t pos = 0) const noexcept;
+    size_t rfind_before_or_throw(const std::string& target, size_t pos, int throw_value) const;
+    size_t rfind_after_or_throw(const std::string& target, size_t pos, int throw_value) const;
+    size_t rfind_after(const std::string& target, size_t pos = 0) const noexcept;
 
     string arg(const std::string& data) const noexcept;
 
@@ -137,24 +181,28 @@ namespace ext
 
   // ext::to_string functions
 
-  std::string to_string(const std::list<std::string>& s_list);
+  std::string to_string(const std::list<std::string>& s_list, const char deliminator = ',');
 
   template<typename T>
-  std::string to_string(const std::list<T>& t_list, const std::function<std::string(const T&)>& accessor)
+  std::string to_string(const std::list<T>& t_list, const std::function<std::string(const T&)>& accessor, const char deliminator = ',')
   {
     std::list<std::string> s_list;
     for(auto& e : t_list)
       s_list.emplace_back(accessor(e));
-    return ext::to_string(s_list);
+    return to_string(s_list, deliminator);
   }
 
   template<typename T, std::enable_if_t<std::is_arithmetic_v<T>, bool> = true>
-  std::string to_string(const std::list<T>& t_list)
-    { return to_string(t_list, std::to_string); }
+  std::string to_string(const std::list<T>& t_list, const char deliminator = ',')
+    { return to_string<T>(t_list, [](const T t) { return std::to_string(t); }, deliminator); }
 
   template<typename T, std::enable_if_t<std::is_scoped_enum_v<T>, bool> = true>
-  std::string to_string(const std::list<T>& t_list)
-    { return to_string<T>(t_list, [](const T& e) { return std::to_string(static_cast<typename std::underlying_type_t<const T>>(e)); }); }
+  std::string to_string(const std::list<T>& t_list, const char deliminator = ',')
+    { return to_string<T>(t_list, [](const T& e) { return std::to_string(static_cast<typename std::underlying_type_t<const T>>(e)); }, deliminator); }
+
+  template<typename T>
+  std::string to_string(const std::initializer_list<T>& i_list, const char deliminator = ',')
+    { return to_string<T>(std::list<T>(i_list), deliminator); }
 
   // ext::to_string functions
   std::list<std::string> to_list(const std::string& str, const char deliminator = ',');
@@ -388,8 +436,7 @@ struct safenode_t : shortjson::node_t
   {
     if(this->identifier == coords_id)
     {
-      if(type != shortjson::Field::Object)
-        throw line_number;
+      value = { 0.0, 0.0 }; // reset value
       for(const safenode_t& node : safeObject<line_number>())
       {
         node.idFloat<line_number>(latitude_id, value.latitude) ||
@@ -403,40 +450,54 @@ struct safenode_t : shortjson::node_t
   template<int line_number>
   bool idObject(const std::string_view& identifier) const
   {
-    if(this->identifier == identifier &&
-       type != shortjson::Field::Object)
-      throw line_number;
-    return this->identifier == identifier;
+    if(this->identifier == identifier)
+    {
+      if(type != shortjson::Field::Object &&
+         type != shortjson::Field::Null)
+        throw line_number;
+      return true;
+    }
+    return false;
   }
 
   template<int line_number>
   bool idArray(const std::string_view& identifier) const
   {
-    if(this->identifier == identifier &&
-       type != shortjson::Field::Array)
-      throw line_number;
-    return this->identifier == identifier;
+    if(this->identifier == identifier)
+    {
+      if(type != shortjson::Field::Array &&
+         type != shortjson::Field::Null)
+        throw line_number;
+      return true;
+    }
+    return false;
   }
 
   template<int line_number>
   std::vector<safenode_t> safeObject(void) const
   {
-    if(type != shortjson::Field::Object)
-      throw line_number;
     std::vector<safenode_t> vec;
-    for(auto node : std::get<std::vector<node_t>>(data))
-      vec.emplace_back(node);
+    if(type == shortjson::Field::Object)
+    {
+      for(auto node : std::get<std::vector<node_t>>(data))
+        vec.emplace_back(node);
+    }
+    else if(type != shortjson::Field::Null)
+      throw line_number;
     return vec;
   }
 
   template<int line_number>
   std::vector<safenode_t> safeArray(void) const
   {
-    if(type != shortjson::Field::Array)
-      throw line_number;
     std::vector<safenode_t> vec;
-    for(auto node : std::get<std::vector<node_t>>(data))
-      vec.emplace_back(node);
+    if(type == shortjson::Field::Array)
+    {
+      for(auto node : std::get<std::vector<node_t>>(data))
+        vec.emplace_back(node);
+    }
+    else if(type != shortjson::Field::Null)
+      throw line_number;
     return vec;
   }
 

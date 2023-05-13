@@ -87,7 +87,7 @@ pair_data_t EVGoScraper::BuildQuery(const pair_data_t& input) const
           .arg(input.query.bounds.northEast().longitude)
           .arg(input.query.bounds.southWest().latitude)
           .arg(input.query.bounds.southWest().longitude);
-      post_data.erase(std::set<char>{'\n',' '});
+      post_data.erase({'\n',' '});
       data.query.post_data = post_data;
       data.query.header_fields = { { "Content-Type", "application/json" } };
       break;
@@ -103,7 +103,7 @@ pair_data_t EVGoScraper::BuildQuery(const pair_data_t& input) const
             "filterByIsManaged": true,
             "filterBySiteId": %1
           })";
-      post_data.erase(std::set<char>{'\n',' '});
+      post_data.erase({'\n',' '});
       post_data.replace("%1", *data.query.node_id);
       data.query.post_data = post_data;
       data.query.header_fields = { { "Content-Type", "application/json" } };
@@ -394,7 +394,8 @@ std::vector<pair_data_t> EVGoScraper::ParsePort(const pair_data_t& data, const s
           }
           else if(nodeL2.idArray("socketPrices"))
           {
-            assert(nodeL2.safeArray().size() == 1);
+            if(nodeL2.safeArray().size() != 1)
+              throw __LINE__;
             for(const safenode_t& nodeL3 : nodeL2.safeArray().front().safeObject())
             {
               if(nodeL3.idFloat("transactionFee", port.price.initial))

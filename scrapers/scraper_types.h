@@ -155,22 +155,25 @@ struct map_bounds_t;
 
 struct coords_t
 {
+  constexpr coords_t(double lat = 0.0, double lng = 0.0) noexcept
+    : latitude(lat), longitude(lng) { }
   double latitude;
   double longitude;
 };
 
 struct bound_t
 {
-  constexpr bound_t(double a = 0.0, double b = 0.0) : max(a < b ? b : a), min(a < b ? a : b) {}
+  constexpr bound_t(double a = 0.0, double b = 0.0) noexcept
+    : max(a < b ? b : a), min(a < b ? a : b) {}
 
   double max;
   double min;
 
-  constexpr operator bool(void) const { return max != 0.0 && min != 0.0; }
+  constexpr operator bool(void) const noexcept { return max != 0.0 && min != 0.0; }
 
-  constexpr void shift(double i) { max += i; min += i; }
+  constexpr void shift(double i) noexcept { max += i; min += i; }
 
-  constexpr void scale_centered(double s)
+  constexpr void scale_centered(double s) noexcept
   {
     double half_diff = (max - min) / 2;
     double center = min + half_diff;
@@ -178,20 +181,23 @@ struct bound_t
     max = center + half_diff * s;
   }
 
-  constexpr double distance(void) const { return std::abs(max - min); }
+  constexpr double distance(void) const noexcept { return std::abs(max - min); }
 };
 
 struct map_bounds_t
 {
+  constexpr map_bounds_t(bound_t lat = { 0.0, 0.0 }, bound_t lng = { 0.0, 0.0 }) noexcept
+    : latitude(lat), longitude(lng) { }
+
   bound_t latitude;
   bound_t longitude;
 
-  constexpr coords_t northEast(void) const { return { latitude.max, longitude.max }; }
-  constexpr coords_t southWest(void) const { return { latitude.min, longitude.min }; }
+  constexpr coords_t northEast(void) const noexcept { return { latitude.max, longitude.max }; }
+  constexpr coords_t southWest(void) const noexcept { return { latitude.min, longitude.min }; }
 
-  constexpr operator bool(void) const { return latitude && longitude; }
+  constexpr operator bool(void) const noexcept { return latitude && longitude; }
 
-  constexpr coords_t getFocus(void) const
+  constexpr coords_t getFocus(void) const noexcept
   {
     return coords_t
     {
@@ -200,14 +206,14 @@ struct map_bounds_t
     };
   }
 
-  void setFocus(const coords_t& new_focus)
+  constexpr void setFocus(const coords_t& new_focus) noexcept
   {
     coords_t old_focus = getFocus();
     latitude.shift(new_focus.latitude - old_focus.latitude);
     longitude.shift(new_focus.longitude - old_focus.longitude);
   }
 
-  void zoom(const double zoom)
+  constexpr void zoom(const double zoom) noexcept
   {
     double factor = 1.0 / std::pow(2.0, zoom);
     latitude.scale_centered(factor);
@@ -231,22 +237,20 @@ struct query_info_t
 
 struct power_t
 {
-  std::optional<uint64_t>   power_id;
   std::optional<int32_t>    level;
   std::optional<Connector>  connector;
   std::optional<double>     amp;
   std::optional<double>     kw;
   std::optional<double>     volt;
 
-  operator bool(void) const;
-  bool operator ==(const power_t& o) const;
-  void incorporate(const power_t& o);
+  operator bool(void) const noexcept;
+  bool operator ==(const power_t& o) const noexcept;
+  bool incorporate(const power_t& o) noexcept;
 };
 
 struct price_t
 {
   price_t(void) : payment(Payment::Undefined) { }
-  std::optional<uint64_t>     price_id; // ignored in functions
   std::optional<std::string>  text;
   Payment                     payment;
   std::optional<Currency>     currency;
@@ -255,14 +259,13 @@ struct price_t
   std::optional<Unit>         unit;
   std::optional<double>       per_unit;
 
-  operator bool(void) const;
-  bool operator ==(const price_t& o) const;
-  void incorporate(const price_t& o);
+  operator bool(void) const noexcept;
+  bool operator ==(const price_t& o) const noexcept;
+  bool incorporate(const price_t& o) noexcept;
 };
 
 struct contact_t
 {
-  std::optional<uint64_t>    contact_id; // ignored in functions
   std::optional<uint32_t>    street_number;
   std::optional<std::string> street_name;
   std::optional<std::string> city;
@@ -272,25 +275,25 @@ struct contact_t
   std::optional<std::string> phone_number; // ignored in operator bool
   std::optional<std::string> URL; // ignored in operator bool
 
-  operator bool(void) const;
-  bool operator ==(const contact_t& o) const;
-  void incorporate(const contact_t& o);
+  operator bool(void) const noexcept;
+  bool operator ==(const contact_t& o) const noexcept;
+  bool incorporate(const contact_t& o) noexcept;
 };
 
 struct schedule_t
 {
   using hours_t = std::pair<int32_t, int32_t>;
 
-  std::optional<uint64_t> schedule_id; // ignored in functions
   std::array<std::optional<hours_t>, 7> week;
   std::string raw_string;
 
-  operator std::string(void) const;
-  schedule_t& operator =(const std::optional<std::string>& input);
+  bool empty(void) const noexcept;
+  operator std::string(void) const noexcept;
+  schedule_t& operator =(const std::optional<std::string>& input) noexcept;
 
-  operator bool(void) const;
-  bool operator ==(const schedule_t& o) const;
-  void incorporate(const schedule_t& o);
+  operator bool(void) const noexcept;
+  bool operator ==(const schedule_t& o) const noexcept;
+  bool incorporate(const schedule_t& o) noexcept;
 };
 
 
@@ -306,10 +309,9 @@ struct port_t
   price_t price;
   std::optional<std::string> display_name;
 
-  bool operator ==(const port_t& o) const { return port_id == o.port_id; }
-  bool operator <(const port_t& o) const { return port_id < o.port_id; }
-  void incorporate(const port_t& o);
-
+  bool operator ==(const port_t& o) const noexcept { return port_id == o.port_id; }
+  bool operator <(const port_t& o) const noexcept { return port_id < o.port_id; }
+  bool incorporate(const port_t& o) noexcept;
 };
 
 struct station_t
@@ -335,7 +337,7 @@ struct station_t
 
   std::list<port_t> ports;
 
-  void incorporate(const station_t& o);
+  bool incorporate(const station_t& o) noexcept;
 };
 
 
@@ -357,14 +359,15 @@ std::ostream & operator << (std::ostream &out, const std::optional<T>& value) no
   return out;
 }
 
-std::ostream & operator << (std::ostream &out, const Connector value) noexcept;
-std::ostream & operator << (std::ostream &out, const Payment value) noexcept;
-std::ostream & operator << (std::ostream &out, const Unit value) noexcept;
-std::ostream & operator << (std::ostream &out, const Currency value) noexcept;
+std::ostream& operator << (std::ostream &out, const Connector value) noexcept;
+std::ostream& operator << (std::ostream &out, const Status    value) noexcept;
+std::ostream& operator << (std::ostream &out, const Network   value) noexcept;
+std::ostream& operator << (std::ostream &out, const Unit      value) noexcept;
+std::ostream& operator << (std::ostream &out, const Currency  value) noexcept;
+std::ostream& operator << (std::ostream &out, const Payment   value) noexcept;
 
 std::ostream & operator << (std::ostream &out, const contact_t& value) noexcept;
 std::ostream & operator << (std::ostream &out, const price_t& value) noexcept;
 std::ostream & operator << (std::ostream &out, const power_t& value) noexcept;
-
 
 #endif // SCRAPER_TYPES_H

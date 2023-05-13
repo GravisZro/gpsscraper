@@ -10,6 +10,7 @@
 #include <regex>
 
 #include <map>
+#include <set>
 
 #include <shortjson/shortjson.h>
 #include "utilities.h"
@@ -46,7 +47,7 @@ pair_data_t ChargehubScraper::BuildQuery(const pair_data_t& input) const
 
     case Parser::BuildQuery | Parser::MapArea:
       data.query.parser = Parser::MapArea;
-      data.query.URL= ext::string("https://apiv2.chargehub.com/api/locationsmap?latmin=%0&latmax=%1&lonmin=%2&lonmax=%3&limit=1000&key=olitest&remove_networks=&remove_levels=&remove_connectors=&remove_other=0&above_power=")
+      data.query.URL= ext::string("https://apiv2.chargehub.com/api/locationsmap?latmin=%0&latmax=%1&lonmin=%2&lonmax=%3&limit=5000&key=olitest&remove_networks=&remove_levels=&remove_connectors=&remove_other=0&above_power=")
                       .arg(input.query.bounds.latitude.min)
                       .arg(input.query.bounds.latitude.max)
                       .arg(input.query.bounds.longitude.min)
@@ -386,11 +387,6 @@ const std::regex& day_regex(RegexId type, Language lang, std::size_t length = st
 
 std::string process_schedule(const std::optional<std::string>& input)
 {
-
-//  auto list = ext::string("^((%0:?[[:space:]])+)(closed|([[:digit:]]{1,2}:[[:digit:]]{2})[[:space:]]?[~-][[:space:]]?([[:digit:]]{1,2}:[[:digit:]]{2}))");
-//  auto range = ext::string("^%0[[:space:]]?-[[:space:]]?%0:?[[:space:]](closed|([[:digit:]]{1,2}:[[:digit:]]{2})[[:space:]]?[~-][[:space:]]?([[:digit:]]{1,2}:[[:digit:]]{2}))");
-//  std::cout << (range.arg(days(English, 2))) << std::endl;
-
   schedule_t output;
   if(input->empty())
   {

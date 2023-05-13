@@ -5,6 +5,7 @@
 #include <string>
 #include <iostream>
 #include <algorithm>
+#include <memory>
 #include <unordered_set>
 #include <fstream>
 
@@ -40,11 +41,6 @@ std::size_t curl_to_string(char* data, std::size_t size, std::size_t nmemb, std:
   return size * nmemb;
 }
 
-bool list_sorter(const std::pair<std::string, ScraperBase*>& first,
-                 const std::pair<std::string, ScraperBase*>& second)
-  { return first.first < second.first; }
-
-
 static SimpleCurl& static_request(void)
 {
   static SimpleCurl request;
@@ -61,7 +57,7 @@ static SimpleCurl& static_request(void)
   return request;
 }
 
-std::string get_page(const std::string& name, const pair_data_t& data)
+std::string get_page(const std::string_view& name, const pair_data_t& data)
 {
   std::string output;
   auto& request = static_request();
@@ -92,6 +88,47 @@ std::string get_page(const std::string& name, const pair_data_t& data)
   return output;
 }
 
+
+void append_line(std::optional<std::string>& target, const std::string_view& data)
+{
+  if(target)
+    target->append("\n").append(data);
+  else
+    target = data;
+}
+
+void eptix_post_process(pair_data_t& data)
+{
+  if(data.station.access_public == true && data.station.name)
+  {
+    ext::string name = *data.station.name;
+
+    std::transform(name.begin(), name.end(), name.begin(),
+                   [](unsigned char c){ return std::tolower(c); });
+
+    if(name.contains_any({"priv", "exec", "dealer", "employee"}) ||
+       name.contains_word_any({"staff", "cosfleet", "bge fleet", "gsa fleet", "slco fleet", "xcel_fleet", "chem fleet", "osmp fleet", "county fleet"}))
+      data.station.access_public = false;
+    else if(name.contains_any({ "college", "campus" })) // college campus
+    {
+      data.station.access_public = false;
+      append_line(data.station.restrictions, "students and staff only");
+    }
+    else if(name.contains("apartment"))
+    {
+      data.station.access_public.reset();
+      append_line(data.station.restrictions, "likely private");
+    }
+    else if(name.contains("garage"))
+    {
+      data.station.access_public.reset();
+      append_line(data.station.restrictions, "likely paid parking");
+    }
+  }
+}
+
+extern std::optional<bool> prefered_string(const ext::string& first, const ext::string& second, bool overwrite = true) noexcept;
+
 int main(int argc, char* argv[])
 {
   curl_global_init(CURL_GLOBAL_DEFAULT);
@@ -102,7 +139,8 @@ int main(int argc, char* argv[])
   std::cerr << std::unitbuf;
   std::clog << std::unitbuf;
 
-  std::list<std::pair<std::string, ScraperBase*>> scrapers =
+  using scraper_t = std::pair<std::string_view, ScraperBase*>;
+  std::list<scraper_t> scraper_list =
   {
     { "chargehub", new ChargehubScraper() },
     { "electrify_america", new ElectrifyAmericaScraper() },
@@ -110,34 +148,30 @@ int main(int argc, char* argv[])
     { "evgo", new EVGoScraper() },
   };
 
+  scraper_list.sort([](const scraper_t& a, const scraper_t& b) noexcept { return a.first < b.first; });
 
-  scrapers.sort(list_sorter);
-
-  if(argc == 2)
+  if(argc > 1)
   {
-    std::pair<std::string, ScraperBase*> prev;
-    for(auto& pair : scrapers)
+    auto pos = std::begin(scraper_list);
+    auto end = std::end(scraper_list);
+    while(pos != end)
     {
-      if(!prev.first.empty())
+      bool found = false;
+      for(int i = 1; i < argc; ++i)
+        if(pos->first == argv[i])
+          found = true;
+
+      if(found)
+        ++pos;
+      else
       {
-        scrapers.remove(prev);
-        prev.first.clear();
+        delete pos->second;
+        pos = scraper_list.erase(pos);
       }
-      if(pair.first != argv[1])
-      {
-        delete pair.second;
-        pair.second = nullptr;
-        prev = pair;
-      }
-    }
-    if(!prev.first.empty())
-    {
-      scrapers.remove(prev);
-      prev.first.clear();
     }
   }
 
-  if(scrapers.empty())
+  if(scraper_list.empty())
   {
     std::cerr << "No scrappers queued!" << std::endl
               << "Exiting." << std::endl;
@@ -145,7 +179,7 @@ int main(int argc, char* argv[])
   else
   {    
     std::cerr << "Scraper queue: ";
-    for(const auto& pair : scrapers)
+    for(const auto& pair : scraper_list)
       std::cerr << pair.first << ", ";
     std::cerr << std::endl;
 
@@ -156,12 +190,11 @@ int main(int argc, char* argv[])
 
     try
     {
-      for(const auto& pair : scrapers)
+      for(auto& scraper : scraper_list)
       {
         insertion_count = 0;
         std::list<pair_data_t> main_queue;
-        ScraperBase* scraper = pair.second;
-        std::cout << pair.first << ": scraper active" << std::endl;
+        std::cout << scraper.first << ": scraper active" << std::endl;
 
         //static_request().setOpt(CURLOPT_COOKIE, ""); // erase all cookies and enable cookies
         {
@@ -179,7 +212,7 @@ int main(int argc, char* argv[])
 
           if((pos.query.parser & Parser::BuildQuery) == Parser::BuildQuery)
           {
-            pos = scraper->BuildQuery(pos);
+            pos = scraper.second->BuildQuery(pos);
           }
           std::string result;
           if(pos.query.parser != Parser::Initial)
@@ -188,13 +221,13 @@ int main(int argc, char* argv[])
             {
               if(i)
                 std::cout << "retry #" << i << std::endl;
-              result = get_page(pair.first, pos);
+              result = get_page(scraper.first, pos);
             }
           }
 
           std::list<pair_data_t> test_queue;
           {
-            std::vector<pair_data_t> tmp = scraper->Parse(pos, result);
+            std::vector<pair_data_t> tmp = scraper.second->Parse(pos, result);
             test_queue = { std::begin(tmp), std::end(tmp) };
           }
           std::cout << "result count: " << test_queue.size() << std::endl;
@@ -229,7 +262,7 @@ int main(int argc, char* argv[])
 
                 if(lookup)
                 {
-                  scraper->classify(nd); // scraper decides parser this should use
+                  scraper.second->classify(nd); // scraper decides parser this should use
                   if(nd.query.child_ids) // has children
                   {
                     for(auto& node_id : ext::to_list(*nd.query.child_ids))
@@ -278,10 +311,12 @@ int main(int argc, char* argv[])
             }
           }
         }
-        std::cout << pair.first << " insertions made: " << insertion_count << std::endl;
+        std::cout << scraper.first << " insertions made: " << insertion_count << std::endl;
 
         total_insertions += insertion_count;
-        delete scraper, scraper = nullptr;
+
+        delete scraper.second;
+        scraper.second = nullptr;
       }
       std::cout << "total insertions: " << total_insertions << std::endl;
     }

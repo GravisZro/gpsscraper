@@ -112,6 +112,7 @@ DBInterface::DBInterface(std::string_view filename)
       "contact_id"        INTEGER   DEFAULT NULL,
       "schedule_id"       INTEGER   DEFAULT NULL,
       "port_ids"          TEXT      NOT     NULL,
+      "conflicts"         BOOLEAN   NOT     NULL,
       "last_update"       TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
       PRIMARY KEY (latitude, longitude)
     ) )",
@@ -511,7 +512,6 @@ contact_t DBInterface::getContact(const std::optional<uint64_t> contact_id)
   if(contact_id)
   {
     std::optional<uint64_t> URL_id, phone_id;
-    contact.contact_id = contact_id;
     { // scope for sql::query type
       sql::query q = std::move(m_db.build_query("SELECT "
                                                   "street_number,"
@@ -555,7 +555,6 @@ void DBInterface::addPrice(const price_t& price)
 {
   if(price)
   {
-    //std::cout << "adding " << price << std::endl;
     sql::query q = std::move(m_db.build_query("INSERT INTO price ("
                                                 "text,"
                                                 "payment,"
@@ -617,7 +616,6 @@ price_t DBInterface::getPrice(const std::optional<uint64_t> price_id)
   price_t price;
   if(price_id)
   {
-    price.price_id = price_id;
     sql::query q = std::move(m_db.build_query("SELECT "
                                                 "text,"
                                                 "payment,"
@@ -652,7 +650,6 @@ void DBInterface::addPower(const power_t& power)
 {
   if(power)
   {
-    //std::cout << "adding " << power << std::endl;
     sql::query q = std::move(m_db.build_query("INSERT INTO power ("
                                                 "level,"
                                                 "connector,"
@@ -707,7 +704,6 @@ power_t DBInterface::getPower(const std::optional<uint64_t> power_id)
   power_t power;
   if(power_id)
   {
-    power.power_id = power_id;
     sql::query q = std::move(m_db.build_query("SELECT "
                                                 "level,"
                                                 "connector,"
@@ -736,10 +732,10 @@ power_t DBInterface::getPower(const std::optional<uint64_t> power_id)
 void DBInterface::addPort(port_t& port)
 {
   addPower(port.power);
-  port.power.power_id = identifyPower(port.power);
-
   addPrice(port.price);
-  port.price.price_id = identifyPrice(port.price);
+
+  std::optional<uint64_t> power_id = identifyPower(port.power);
+  std::optional<uint64_t> price_id = identifyPrice(port.price);
 
   sql::query q = std::move(m_db.build_query("INSERT INTO ports ("
                                               "network_id,"
@@ -753,8 +749,8 @@ void DBInterface::addPort(port_t& port)
                            .arg(port.network_id)
                            .arg(port.port_id)
                            .arg(port.station_id)
-                           .arg(port.power.power_id)
-                           .arg(port.price.price_id)
+                           .arg(power_id)
+                           .arg(price_id)
                            .arg(port.status)
                            .arg(port.display_name));
 
@@ -764,6 +760,7 @@ void DBInterface::addPort(port_t& port)
 
 port_t DBInterface::getPort(Network network_id, const std::string& port_id)
 {
+  std::optional<uint64_t> power_id, price_id;
   port_t port;
   port.network_id = network_id;
   port.port_id = port_id;
@@ -787,13 +784,13 @@ port_t DBInterface::getPort(Network network_id, const std::string& port_id)
 
     MUST(q.fetchRow())
       q.getField(port.station_id)
-       .getField(port.power.power_id)
-       .getField(port.price.price_id)
+       .getField(power_id)
+       .getField(price_id)
        .getField(port.status)
        .getField(port.display_name);
   }
-  port.power = getPower(port.power.power_id);
-  port.price = getPrice(port.price.price_id);
+  port.power = getPower(power_id);
+  port.price = getPrice(price_id);
   return port;
 }
 
@@ -803,7 +800,8 @@ void DBInterface::addStation(station_t& station)
 {
   try
   {
-    station.incorporate(getStation(station.location));
+    std::optional<uint64_t> contact_id, schedule_id;
+    bool conflicts = station.incorporate(getStation(station.location));
 
     assert(!station.ports.empty());
 
@@ -823,7 +821,8 @@ void DBInterface::addStation(station_t& station)
         contact = station.contact;
       if(contact)
         addContact(contact);
-      contact.contact_id = identifyContact(contact);
+
+      contact_id = identifyContact(contact);
       station.contact = contact;
     }
 
@@ -841,8 +840,11 @@ void DBInterface::addStation(station_t& station)
       addPort(port);
     }
 
-    addUniqueString(station.schedule);
-    station.schedule.schedule_id = identifyUniqueString(station.schedule);
+    if(!station.schedule.empty())
+    {
+      addUniqueString(station.schedule);
+      schedule_id = identifyUniqueString(station.schedule);
+    }
 
     sql::query q = std::move(m_db.build_query("INSERT OR REPLACE INTO stations ("
                                                 "meta_network_ids,"
@@ -857,8 +859,9 @@ void DBInterface::addStation(station_t& station)
                                                 "restrictions,"
                                                 "contact_id,"
                                                 "schedule_id,"
-                                                "port_ids"
-                                              ") VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)")
+                                                "port_ids,"
+                                                "conflicts"
+                                              ") VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)")
                              .arg(to_optional(ext::to_string<Network>(station.meta_network_ids)))
                              .arg(to_optional(ext::to_string(station.meta_station_ids)))
                              .arg(station.network_id)
@@ -869,9 +872,10 @@ void DBInterface::addStation(station_t& station)
                              .arg(station.description)
                              .arg(station.access_public)
                              .arg(station.restrictions)
-                             .arg(station.contact.contact_id)
-                             .arg(station.schedule.schedule_id)
-                             .arg(to_optional(ext::to_string<port_t>(station.ports, [](const port_t& p) { return *p.port_id; }))));
+                             .arg(contact_id)
+                             .arg(schedule_id)
+                             .arg(to_optional(ext::to_string<port_t>(station.ports, [](const port_t& p) { return *p.port_id; })))
+                             .arg(conflicts));
 
     while(!q.execute() && q.lastError() == SQLITE_BUSY);
     assert(q.lastError() == SQLITE_DONE || q.lastError() == SQLITE_CONSTRAINT_PRIMARYKEY);
@@ -892,6 +896,7 @@ station_t DBInterface::getStation(sql::query&& q)
   if(q.fetchRow())
   {
     std::optional<std::string> meta_network_ids, meta_station_ids;
+    std::optional<uint64_t> contact_id, schedule_id;
     std::string port_ids;
 
     q.getField(meta_network_ids)
@@ -904,8 +909,8 @@ station_t DBInterface::getStation(sql::query&& q)
      .getField(station.description)
      .getField(station.access_public)
      .getField(station.restrictions)
-     .getField(station.contact.contact_id)
-     .getField(station.schedule.schedule_id)
+     .getField(contact_id)
+     .getField(schedule_id)
      .getField(port_ids);
 
     station.meta_network_ids = ext::to_list<Network>(meta_network_ids);
@@ -915,8 +920,8 @@ station_t DBInterface::getStation(sql::query&& q)
                                          [&station, this](const std::string& port_id)
                                          { return getPort(*station.network_id, port_id); });
 
-    station.contact = getContact(station.contact.contact_id);
-    station.schedule = getUniqueString(station.schedule.schedule_id);
+    station.contact = getContact(contact_id);
+    station.schedule = getUniqueString(schedule_id);
   }
 
   return station;
